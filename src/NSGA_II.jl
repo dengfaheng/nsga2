@@ -1,108 +1,4 @@
 module NSGA_II
-using ProgressMeter
-
-#------------------------------------------------------------------------------
-#BEGIN readme
-
-
-
-# Implementation of genetic algorithm mutation and crossover operators
-# consult:
-
-# Wikipedia...
-
-# Genetic Algorithms in Search, Optimization, and Machine Learning
-# David E. Goldberg
-
-
-
-#END   readme
-#------------------------------------------------------------------------------
-
-
-
-#------------------------------------------------------------------------------
-#BEGIN crossover operators
-
-
-
-#BEGIN  uniformCrossover
-function uniformCrossover(genes1::Vector, genes2::Vector)
-  @assert length(genes1) == length(genes2) != 0
-
-  newGenes = deepcopy(genes1)
-  genes2 = deepcopy(genes2)
-
-  for i = 1:length(newGenes)
-    if rand() < 0.5
-      newGenes[i] = genes2[i]
-    end
-  end
-  return newGenes
-end
-#END
-
-
-
-
-#BEGIN onePointCrossover
-function onePointCrossover(genes1::Vector, genes2::Vector)
-  #exchange genes after a certain point in the chromosome
-  @assert length(genes1) == length(genes2) != 0
-  result = deepcopy(genes1)
-  genes2 = deepcopy(genes2)
-  
-  #find point
-  point = rand(1:length(result))
-  
-  #swap the values after the point
-  for i = point:length(result)
-    result[i] = genes2[i]
-  end
-  
-  return result
-end
-#END
-
-
-
-#END   crossover operators
-#------------------------------------------------------------------------------
-
-
-
-#------------------------------------------------------------------------------
-#BEGIN mutation operators
-
-
-
-#BEGIN uniformMutate
-function uniformMutate(originalGenes::Vector, alleles::Vector, probability = 0.05)
-  #copy the individual genes
-  newGenes = deepcopy(originalGenes)
-  
-  #for each unit, mutate if random is inferior to given probability
-  for i = 1:length(newGenes)
-    if(rand() < probability)
-      newGenes[i] = alleles[i][rand(1:length(alleles[i]))]
-    end
-  end
-  
-  return newGenes
-end
-#END
-
-
-
-#END   mutation operators
-#------------------------------------------------------------------------------
-
-
-
-
-#------------------------------------------------------------------------------
-#BEGIN readme
-
 
 
 #Implementation of the NSGA-II multiobjective
@@ -118,12 +14,74 @@ end
 
 
 
-#END   readme
+#------------------------------------------------------------------------------
+#BEGIN crossover operators
+# some simple crossover operators (uniform, one point crossover)
+# see wikipedia or Goldberg's book for more information
+
+
+function uniformCrossover(self_genes::Vector, other_genes::Vector)
+  @assert length(genes_1) == length(genes_2) != 0
+
+  # make the function pure by copying the gene vectors
+  self_genes = deepcopy(self_genes)
+  other_genes = deepcopy(other_genes)
+
+  for i = 1:length(self_genes)
+    if rand() < 0.5
+      self_genes[i] = other_genes[i]
+    end
+  end
+  return self_genes
+end
+
+
+
+function onePointCrossover(self_genes::Vector, other_genes::Vector)
+  # exchange genes after a certain point in the chromosome
+  @assert length(self_genes) == length(other_genes) != 0
+  self_genes = deepcopy(self_genes)
+  other_genes = deepcopy(other_genes)
+
+  # find point
+  point = rand(1:length(self_genes))
+
+  #swap the values after the point
+  for i = point:(length(self_genes))
+    self_genes[i] = other_genes[i]
+  end
+
+  return self_genes
+end
+
+
+#END
 #------------------------------------------------------------------------------
 
 
 
+#------------------------------------------------------------------------------
+#BEGIN mutation operators
+# mutation operators modify the gene vector according to a certain probability
 
+
+function uniformMutate(genes::Vector, mutate::Function, mutation_probability)
+  # each gene has a probability of being mutated
+  # mutate function has information about the position and identity of the actual allele
+  new_genes = deepcopy(genes)
+
+  for i = 1:length(new_genes)
+    if(rand() < mutation_probability)
+      new_genes[i] = mutate(new_genes[i], i)
+    end
+  end
+
+  return new_genes
+end
+
+
+#END
+#------------------------------------------------------------------------------
 
 
 
@@ -132,17 +90,17 @@ end
 
 
 immutable individual
-  #unit, individual, basic block of the solution
+  # basic block of the solution
   genes::Vector
   fitness::Vector
-  
+
   function individual(genes::Vector, fitnessValues::Vector)
-    #fitness value is precomputed
+    # fitness value is precomputed
     @assert length(genes) != 0
     @assert length(fitnessValues) != 0
     new(genes, fitnessValues)
   end
-  
+
   function individual(genes::Vector, fitnessFunction::Function)
     #fitness value is to be computed
     @assert length(genes) != 0
@@ -155,22 +113,22 @@ end
 type population
   #the compound of all individuals
   #includes a mapping of fitness values to crowding distance
-  
+
   individuals::Vector{individual}
   distances::Dict{Vector, (Int, FloatingPoint)}
-  
+
   function population()
     #initialize empty
     self = new(individual[], Dict{Vector, (Int, FloatingPoint)}())
   end
-  
+
   function population(individuals::Vector{individual})
     #initialize with individuals but no distances
     @assert length(individuals) != 0
     d = Dict{Vector, (Int, FloatingPoint)}()
     self = new(individuals, d)
   end
-  
+
   function population(individuals::Vector{individual},
                       distances::Dict{Vector, (Int, FloatingPoint)})
     #initialize with individuals and distances
@@ -522,7 +480,7 @@ function generateOffsprings(childrenTemplates::Vector{individual},
   
   for i = 1:popSize
     #initialize new genes and a new fitness from childrenTemplates genes and fitness
-    newGenes = deepcopy(childrenTemplates[i].genes)
+    new_genes = deepcopy(childrenTemplates[i].genes)
     newFitness = deepcopy(childrenTemplates[i].fitness)
     modified = false
 
@@ -539,23 +497,23 @@ function generateOffsprings(childrenTemplates::Vector{individual},
       end
 
       #combine two childrenTemplates genes (on which the fitness is based)
-      newGenes = crossoverOperator(newGenes, childrenTemplates[secondParentIndex].genes)
+      new_genes = crossoverOperator(new_genes, childrenTemplates[secondParentIndex].genes)
     end
     
     if evolutionaryEvents[i][2] == true
       modified = true
       #mutation
       
-      newGenes = mutationOperator(newGenes, alleles)
+      new_genes = mutationOperator(new_genes, alleles)
     end
       
     #if modified, re-evaluate
     if modified
-      newFitness = evaluationFunction(newGenes)
+      newFitness = evaluationFunction(new_genes)
     end
     
     #add newly created individuals to the children population
-    push!(childrenPopulation.individuals, individual(newGenes, newFitness))
+    push!(childrenPopulation.individuals, individual(new_genes, newFitness))
   end
 
   return childrenPopulation
@@ -637,7 +595,7 @@ function main(alleles::Vector,
   @assert iterations > 0
   
   #progress bar stuff
-  p = Progress(iterations, 1, "Generating solutions", 50)
+  # p = Progress(iterations, 1, "Generating solutions", 50)
   
   
   #main loop of the NSGA-II algorithm
