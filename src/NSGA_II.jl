@@ -81,7 +81,7 @@ typealias HallOfFame Population
 
 
 #------------------------------------------------------------------------------
-#BEGIN NSGA-II helper methods
+#BEGIN helper methods
 
 
 function non_dominated_compare(a::Vector, b::Vector, comparator = >)
@@ -282,8 +282,8 @@ end
 
 
 function last_front_selection(population::Population,
-                            indices::Vector{Int},
-                            to_select::Int)
+                              indices::Vector{Int},
+                              to_select::Int)
   @assert 0 < to_select <= length(indices) "not enough individuals to select"
 
   # since individuals within the same front do not dominate each other, they are
@@ -358,24 +358,22 @@ end
 
 
 function crowded_compare(first ::(Int, FloatingPoint),
-                        second::(Int, FloatingPoint))
+                         second::(Int, FloatingPoint))
   # crowded comparison operator
   # (rank, crowding distance)
   # if rank is the same, tie break with crowding distance
   # if same distance choose randomly
-  @assert valueA[2]>=0
-  @assert valueA[2]>=0
-  # A rank < B rank
-  if valueA[1] < valueB[1]
+  @assert first[2]>=0
+  @assert second[2]>=0
+  # rank comarison
+  if first[1] < second[1]
     return 0
-  # B rank < A rank
-  elseif valueA[1] > valueB[1]
+  elseif first[1] > second[1]
     return 1
-  # A dist > B dist
-  elseif valueA[2] > valueB[2]
+  # crowding distance comparison
+  elseif first[2] > second[2]
     return 0
-  # B dist > A dist
-  elseif valueA[2] < valueB[2]
+  elseif first[2] < second[2]
     return 1
   # A == B, choose either
   else
@@ -405,152 +403,91 @@ function unique_fitness_tournament_selection(population::Population)
   end
 
   # else we must select parents
-  newParents = Individual[]
+  selected_parents = individual[]
 
-  while length(newParents) != population_size
-    # we either pick all the fitnesses and select a random Individual from them
+  while length(selected_parents) != population_size
+    # we either pick all the fitnesses and select a random individual from them
     # or select a subset of them. depends on how many new parents we still need to add
-    k = min((2*(population_size - length(newParents))), length(fitness_to_index))
+    k = min((2*(population_size - length(selected_parents))), length(fitness_to_index))
 
     # sample k fitnesses and get their (front, crowing) from population.distances
-    candidateFitnesses = select_without_replacement(fitnesses, k)
-    frontAndCrowding = map(x->population.distances[x], candidateFitnesses)
+    candidate_fitnesses = select_without_replacement(fitnesses, k)
+    front_and_crowding = map(x->population.distances[x], candidate_fitnesses)
 
-    # choose n fittest out of 2n
-    # by comparing pairs of neighbors
-    chosenFitnesses = Vector[]
+    # choose the fitnesses
+    chosen_fitnesses = Vector[]
     i = 1
     while i < k
       # crowded_compare returns an offset (0 if first solution is better, 1 otherwise)
-      selectedIndex = i + crowded_compare(frontAndCrowding[i], frontAndCrowding[i+1])
-      push!(chosenFitnesses, candidateFitnesses[selectedIndex])
+      selected_index = i + crowded_compare(front_and_crowding[i], front_and_crowding[i+1])
+      push!(chosen_fitnesses, candidate_fitnesses[selected_index])
       i += 2
     end
 
-    #we now randomly choose an Individual from the indices associated with the chosen fitnesses
-    for i in chosenFitnesses
-      chosenIndex = fitness_to_index[i][rand(1:length(fitness_to_index[i]))]
-      push!(newParents, population.individuals[chosenIndex])
+    # we now randomly choose an individual from the indices associated with the chosen fitnesses
+    for i in chosen_fitnesses
+      chosen_index = fitness_to_index[i][rand(1:length(fitness_to_index[i]))]
+      push!(selected_parents, population.individuals[chosen_index])
     end
 
   end
-  newParents
+  selected_parents
 end
 
 
-function generateOffsprings(childrenTemplates::Vector{Individual}, 
-                            probabilityOfCrossover::FloatingPoint,
-                            probabilityOfMutation::FloatingPoint,
-                            evaluationFunction::Function,
-                            alleles,
-                            mutationOperator,
-                            crossoverOperator)
-  # final step of the generation, creates the next population
-  # from the children templates
-  # initialize
-  childrenPopulation = Population()
-  popSize = length(childrenTemplates)
-
-  # deciding who is mutating and having crossovers
-  willMutate   = map(x->x <= probabilityOfMutation,  rand(length(childrenTemplates)))
-  willRecombine= map(x->x <= probabilityOfCrossover, rand(length(childrenTemplates)))
-
-  evolutionaryEvents = collect(zip(willMutate, willRecombine))
-
-  for i = 1:popSize
-    # initialize new genes and a new fitness from childrenTemplates genes and fitness
-    new_genes = deepcopy(childrenTemplates[i].genes)
-    newFitness = deepcopy(childrenTemplates[i].fitness)
-    modified = false
-
-    if evolutionaryEvents[i][1] == true
-      modified = true
-
-      #recombination (crossover)
-      # randomly choose second parent
-      secondParentIndex = rand(1:(popSize-1))
-
-      # leave a gap to not select same parent
-      if secondParentIndex >= i
-        secondParentIndex += 1
-      end
-
-      # combine two childrenTemplates genes (on which the fitness is based)
-      new_genes = crossoverOperator(new_genes, childrenTemplates[secondParentIndex].genes)
-    end
-
-    if evolutionaryEvents[i][2] == true
-      modified = true
-      # mutation
-      new_genes = mutationOperator(new_genes, alleles)
-    end
-
-    # if modified, re-evaluate
-    if modified
-      newFitness = evaluationFunction(new_genes)
-    end
-
-    # add newly created individuals to the children population
-    push!(childrenPopulation.individuals, Individual(new_genes, newFitness))
-  end
-
-  return childrenPopulation
+function generate_children(individuals::Vector{Individual},
+                           mutate_population::Function,
+                           crossover_population::Function,
+                           evaluation_population::Function)
+  # final step of the generation, apply mutation and crossover to yield new children
+  # both crossover and mutation functions must apply over entire populations
+  # apply crossover, mutation
+  # and then evaluation new individuals (can fill their fitness values with bogus until evaluation)
+  new_population = crossover_population(individuals)
+  new_population = mutate_population(new_population)
+  new_population
 end
 
 
-function addToHallOfFame(population::Population,
-                         firstFrontIndices::Vector{Int},
-                         HallOfFame::hallOfFame,
-                         maxSize=400)
+function add_to_hall_of_fame(population::Population,
+                             indices::Vector{Int},
+                             hall_of_fame::HallOfFame,
+                             max_hall_of_fame_size)
   # add the best individuals to the Hall of Fame population to save them for
   # further examination. we merge the first front of the actual population
   # with the rest of the hall of fame to then select the first front of it.
 
-  # we know from previous calculation the indices of the best individuals
-  firstFront = population.individuals[firstFrontIndices]
-  # println("num in hall of fame $(length(HallOfFame.individuals))")
-  # println("num external first front $(length(firstFront))")
+  hall_of_fame.individuals = vcat(hall_of_fame.individuals, population.individuals[indices])
+
+  # acquire the domination information
+  domination_information = map(x -> evaluate_against_others(hall_of_fame, x, non_dominated_compare), range(1, length(hall_of_fame.individuals)))
 
 
-  # we add add the best individuals to the Hall of Fame
-  for i in firstFront
-    push!(HallOfFame.individuals, i)
-  end
+  # filter the dominated individuals
+  hall_of_fame.individuals = hall_of_fame.individuals[map(x->x[1], filter(x->x[2]==0, domination_information))]
 
-  # elmiminate duplicates (since it is elitist, same individuals may reappear)
-  HallOfFame.individuals = unique(HallOfFame.individuals)
 
-  # find the first non dominated front, to select the best individuals of the new Hall of Fame
-
-  # acquire the domination values
-  values = (Int, Int, Array{Int,1})[]
-  for i=1:length(HallOfFame.individuals)
-    push!(values, evaluate_against_others(HallOfFame, i, non_dominated_compare))
-  end
-
-  # get first front individuals
-  firstFront2 = filter(x->x[2]==0, values)
-
-  # get indices
-  firstFrontIndices2 = map(x->x[1], firstFront2)
-  firstFrontIndividuals = HallOfFame.individuals[firstFrontIndices2]
-
-  fitnesses = unique(map(x->x.fitness, firstFrontIndividuals))
-
-  # unique genes
-  selected = Individual[]
-  allGenes = Set{Vector}()
-  for i in firstFrontIndividuals
-    if !(i.genes in allGenes)
-      push!(allGenes, i.genes)
-      push!(selected, i)
+  # elmiminate duplicates genes (since it is elitist, same individuals may reappear)
+  selected_indices = Int[]
+  genes = Set{Vector}()
+  for (index, individual) in enumerate(hall_of_fame.individuals)
+    if !(individual.genes in genes)
+      push!(genes, individual.genes)
+      push!(selected_indices, index)
     end
   end
 
-  HallOfFame.individuals = selected
+  hall_of_fame.individuals = hall_of_fame.individuals[selected_indices]
 end
 
 
+#END
+#------------------------------------------------------------------------------
+
+
+
+
+#------------------------------------------------------------------------------
 #BEGIN main
 
 function main(alleles::Vector,
@@ -559,8 +496,8 @@ function main(alleles::Vector,
               iterations::Int,
               probabilityOfCrossover = 0.1,
               probabilityOfMutation = 0.05,
-              crossoverOperator = uniformCrossover,
-              mutationOperator = uniformMutate)
+              crossover_population = uniformCrossover,
+              mutate_population = uniformMutate)
   @assert PopulationSize > 0
   @assert iterations > 0
 
@@ -569,7 +506,7 @@ function main(alleles::Vector,
 
   # main loop of the NSGA-II algorithm
   # create hall of fame to save the best individuals
-  HallOfFame = hallOfFame()
+  hall_of_fame = HallOfFame()
 
   # initialize with two randomly initialized populations
   kickstartingPopulation = initializePopulation(alleles, fitness_function, PopulationSize)
@@ -584,7 +521,7 @@ function main(alleles::Vector,
     fronts = nonDominatedSort(mergedPopulation)
 
     # add the best individuals to the hall of fame
-    addToHallOfFame(mergedPopulation, fronts[1], HallOfFame)
+    add_to_hall_of_fame(mergedPopulation, fronts[1], hall_of_fame)
 
 
     if length(fronts) == 1 || length(fronts[1]) >= PopulationSize
@@ -653,16 +590,16 @@ function main(alleles::Vector,
 #     end
     #we make a tournament selection to select children
     #the templates are actual parents
-    childrenTemplates = unique_fitness_tournament_selection(parentPopulation)
+    individuals = unique_fitness_tournament_selection(parentPopulation)
 
     # apply genetic operators (recomination and mutation) to obtain next pop
-    nextPopulation = generateOffsprings(childrenTemplates,
+    nextPopulation = generate_children(individuals,
                                         probabilityOfCrossover,
                                         probabilityOfMutation,
                                         fitness_function,
                                         alleles,
-                                        mutationOperator,
-                                        crossoverOperator)
+                                        mutate_population,
+                                        crossover_population)
     # we now have a new Population, we must now
     # -create a new merged population
     # -assign this newly produce population as being the previous of the next loop
@@ -672,6 +609,6 @@ function main(alleles::Vector,
     next!(p)
   end
 
-  return [HallOfFame, previousPopulation]
+  return [hall_of_fame, previousPopulation]
 end
 
