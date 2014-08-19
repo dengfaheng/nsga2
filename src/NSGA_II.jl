@@ -1,8 +1,8 @@
 module NSGA_II
 
 
-#Implementation of the NSGA-II multiobjective
-#genetic algorithm as described in:
+# Implementation of the NSGA-II multiobjective
+# genetic algorithm as described in:
 
 # Revisiting the NSGA-II crowding-distance computation
 # Felix-Antoine Fortin
@@ -290,7 +290,7 @@ function last_front_selection(population::Population,
   # selected based crowding distance (greater diversity is desired)
 
   # map {fitness => crowding distance}
-  fitness_to_crowding = calculate_crowding_distance(population, lastFrontIndices, -1)
+  fitness_to_crowding = calculate_crowding_distance(population, last_frontIndices, -1)
 
   # map {fitness => indices}
   fitness_to_index = Dict{Vector, Vector{Int}}()
@@ -453,7 +453,7 @@ function add_to_hall_of_fame(population::Population,
                              indices::Vector{Int},
                              hall_of_fame::HallOfFame,
                              max_hall_of_fame_size)
-  # add the best individuals to the Hall of Fame population to save them for
+  # add the best individuals to the hall of fame population to save them for
   # further examination. we merge the first front of the actual population
   # with the rest of the hall of fame to then select the first front of it.
 
@@ -478,6 +478,10 @@ function add_to_hall_of_fame(population::Population,
   end
 
   hall_of_fame.individuals = hall_of_fame.individuals[selected_indices]
+
+  if length(hall_of_fame.individuals) > max_hall_of_fame_size
+    hall_of_fame.individuals = select_without_replacement(hall_of_fame.individuals, max_hall_of_fame_size)
+  end
 end
 
 
@@ -490,125 +494,83 @@ end
 #------------------------------------------------------------------------------
 #BEGIN main
 
-function main(alleles::Vector,
+function main(initialize_population::Function,
               fitness_function::Function,
-              PopulationSize::Int,
-              iterations::Int,
-              probabilityOfCrossover = 0.1,
-              probabilityOfMutation = 0.05,
-              crossover_population = uniformCrossover,
-              mutate_population = uniformMutate)
-  @assert PopulationSize > 0
-  @assert iterations > 0
+              crossover_population::Function,
+              mutate_population::Function,
+              population_size::Int,
+              number_of_generations::Int,
+              max_hall_of_fame_size::Int)
+  @assert population_size > 0
+  @assert number_of_generations >= 0
+  @assert max_hall_of_fame_size >= 0
 
-  #progress bar stuff
-  # p = Progress(iterations, 1, "Generating solutions", 50)
-
-  # main loop of the NSGA-II algorithm
-  # create hall of fame to save the best individuals
+  # hall of fame will keep 
   hall_of_fame = HallOfFame()
 
-  # initialize with two randomly initialized populations
-  kickstartingPopulation = initializePopulation(alleles, fitness_function, PopulationSize)
-  previousPopulation = initializePopulation(alleles, fitness_function, PopulationSize)
+  # initialize two populations
+  initial_population = initializePopulation(alleles, fitness_function, population_size)
+  previous_population = initializePopulation(alleles, fitness_function, population_size)
 
-  # merge two initial parents
-  mergedPopulation = Population(vcat(kickstartingPopulation.individuals, previousPopulation.individuals))
+  # merge them
+  merged_population = Population(vcat(initial_population.individuals, previous_population.individuals))
 
-  # |selection -> offsprings| -> |selection -> offsprings| -> ...
-  for i = 1:iterations
+  # main loop: |selection -> generation| -> |selection -> generation| -> ...
+  for iteration = 1:number_of_generations
+
     # sort the merged population into non dominated fronts
-    fronts = nonDominatedSort(mergedPopulation)
+    domination_fronts = non_dominated_sort(merged_population)
 
     # add the best individuals to the hall of fame
-    add_to_hall_of_fame(mergedPopulation, fronts[1], hall_of_fame)
+    add_to_hall_of_fame(merged_population, domination_fronts[1], hall_of_fame)
 
 
-    if length(fronts) == 1 || length(fronts[1]) >= PopulationSize
-        calculate_crowding_distance(mergedPopulation, fronts[1], 1, true)
-        selectedFromLastFront = last_front_selection(mergedPopulation,
-                                                   fronts[1],
-                                                   PopulationSize)
-        # put the indices of the individuals in all
-        # fronts that were selected as parents
-        parentsIndices = selectedFromLastFront
+    if length(domination_fronts) == 1 || length(domination_fronts[1]) >= population_size
+      # edge case: only one front to select individuals from
+        merge!(population.crowding_distances, calculate_crowding_distance(merged_population, domination_fronts[1], 1))
+        selected_indices = last_front_selection(merged_population, domination_fronts[1], population_size)
     else
         # separate last front from rest, it is treated differently with
-        # last_front_selection function
-        indexOfLastFront = length(fronts)
-        lastFront = fronts[indexOfLastFront]
-        fronts = fronts[1: (indexOfLastFront - 1)]
+        last_front = domination_fronts[end]
+        domination_fronts = domination_fronts[1: (end - 1)]
 
-        #calculate the crowding crowding_distances for all but the last front and 
-        #update the mergedPopulation.distance
-        #   #if we wish to update, the dict of computed crowding_distances is merged to the main one
-        #   #in P.distances
-        #   if update == true
-        #     merge!(P.distances, fitness_to_crowding)
-        #   end
-
-        for j = 1:length(fronts)
-            front_j = fronts[j]
-            calculate_crowding_distance(mergedPopulation, front_j, j, true)
+        for (index, front) in enmuerate(domination_fronts)
+          # update the crowding distances
+          merge!(population.crowding_distances, calculate_crowding_distance(merged_population, front, index))
         end
 
-        #calculate how many individuals are left to 
-        #select (there's n-k in the previous fronts)
-        k = PopulationSize - length(reduce(vcat, fronts))
+        # calculate how many individuals are left to select (there's n-k in the previous fronts)
+        to_select = population_size - length(reduce(vcat, domination_fronts))
 
-        #find the indices of the k individuals we need from the last front
-        selectedFromLastFront = last_front_selection(mergedPopulation,
-                                                lastFront,
-                                                k)
+        # find the indices of the k individuals we need from the last front
+        selected_indices = last_front_selection(merged_population, last_front, to_select)
 
-        #update the crowding distance on the last front
-        calculate_crowding_distance(mergedPopulation, selectedFromLastFront, indexOfLastFront, true)
+        # update the crowding distance on the last front
+        merge!(merged_population.crowding_distances, calculate_crowding_distance(merged_population, selectedFromLastFront, indexOfLastFront))
 
-        #put the indices of the individuals in all
-        #fronts that were selected as parents
-        parentsIndices = vcat(reduce(vcat, fronts), selectedFromLastFront)
+        # put the indices of the individuals in all
+        # fronts that were selected as parents
+        selected_indices = vcat(reduce(vcat, domination_fronts), selected_indices)
     end
 
-    #--------------------------------------------------------------------
-
-    # at this point, we have all we need to create the next Population:
-    #   -indices of n individuals that were selected from the merged Population
-    #   -crowding distance and front information (in actualPop.distance)
-
-    parentPopulation = Population(mergedPopulation.individuals[parentsIndices],
-                                  mergedPopulation.distances)
+    parent_population = Population(merged_population.individuals[selected_indices],
+                                  merged_population.distances)
 
 
-    #print the dict of crowding_distances
-#     for dist in keys(parentPopulation.distances)
-#       print("[")
-#       print(dist)
-#       print("]")
-#       print(" : ")
-#       print(parentPopulation.distances[dist])
-#       println("")
-#     end
     #we make a tournament selection to select children
     #the templates are actual parents
-    individuals = unique_fitness_tournament_selection(parentPopulation)
+    individuals = unique_fitness_tournament_selection(parent_population)
 
     # apply genetic operators (recomination and mutation) to obtain next pop
-    nextPopulation = generate_children(individuals,
-                                        probabilityOfCrossover,
-                                        probabilityOfMutation,
-                                        fitness_function,
-                                        alleles,
-                                        mutate_population,
-                                        crossover_population)
-    # we now have a new Population, we must now
-    # -create a new merged population
-    # -assign this newly produce population as being the previous of the next loop
-    mergedPopulation = Population(vcat(nextPopulation.individuals, previousPopulation.individuals))
-    previousPopulation = nextPopulation
+    next_population = generate_children(individuals, mutate_population, crossover_population, evaluation_population)
 
-    next!(p)
+    merged_population = Population(vcat(next_population.individuals, previous_population.individuals))
+    previous_population = next_population
+
   end
 
-  return [hall_of_fame, previousPopulation]
+  (hall_of_fame, previous_population)
 end
 
+#END
+#------------------------------------------------------------------------------
