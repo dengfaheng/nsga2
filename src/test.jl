@@ -1,14 +1,6 @@
 
-# tests nsga-ii script
-
 include("nsga-ii.jl")
 using Base.Test
-
-
-function create_random_fitness(fitness_length::Int)
-  # helper
-  return rand(1:10000, fitness_length)
-end
 
 
 function test_non_dominated_compare(test_size::Int, fitness_size::Int)
@@ -17,7 +9,7 @@ function test_non_dominated_compare(test_size::Int, fitness_size::Int)
 
   # create vector of random fitness arrays
   for i =1:test_size
-    push!(tests, create_random_fitness(fitness_size))
+    push!(tests, rand(1:10000, fitness_size))
   end
 
   function all_compare(x,y, op)
@@ -50,33 +42,31 @@ function test_non_dominated_compare(test_size::Int, fitness_size::Int)
 end
 
 
-function test_fast_delete_speed()
+function test_fast_delete_speed(test_size::Int)
 
-  vectors = Dict{Int, Vector{Vector{Int}}}()
+  vectors = Vector{Int}[]
 
-  for _=1:1000
-    v = Int[]
-    for _ = 1:1000
-      push!(v, int(rand()*500000))
+  for _=1:test_size
+    v::Vector{Int} = rand(1:100000, 2000)
+    v = unique(v)
+    if length(v) > 1000
+      v = v = v[1:1000]
+      push!(vectors, sort(v))
     end
-    fixed_vector = sort(unique(v))
-    vectors[length(fixed_vector)] = push!(get(vectors, length(fixed_vector), Vector{Int}[]), fixed_vector)
   end
-  vectors = vectors[1000]
 
-
-  function test_fd(f::Function)
-    for i=1:100
-      for j=1:100
-        a = f(vectors[i], vectors[j])
+  function test_fd(f::Function, vectors::Vector{Vector{Int}})
+    for v1 in vectors
+      for v2 in vectors
+        local tmp = f(v1, v2)
       end
     end
   end
 
   println("fast delete function")
-  @time test_fd(fast_delete)
+  @time test_fd(fast_delete, vectors)
   println("set difference function")
-  @time test_fd(setdiff)
+  @time test_fd(setdiff, vectors)
 end
 
 
@@ -84,14 +74,14 @@ function test_fast_delete_correctness(test_size::Int, vector_size::Int)
 
   function slow_delete(array::Vector, to_delete::Vector)
     # helper, used to compare with fast_delete
-    return filter(x->!(x in to_delete), values)
+    filter(x->!(x in to_delete), array)
   end
 
   # unit test, exhaustive
   for _ = 1:test_size
-    values = sort(rand(minInt:maxInt, vector_size))
-    deletion = sort(rand(minInt:maxInt, vector_size))
-    @test slow_delete(values, deletion) == fast_delete(values, deletion)
+    array = sort(rand(1:50000, vector_size))
+    to_delete = sort(rand(1:50000, vector_size))
+    @test slow_delete(array, to_delete) == fast_delete(array, to_delete)
   end
   return true
 end
@@ -100,8 +90,8 @@ end
 function test_non_dominated_sort(population_size::Int, fitness_length::Int)
   # verify property of non dominated sorting results
   population = Population()
-  for i =  1:population_size
-    push!(population.individuals, Individual([0], create_random_fitness(fitness_length)))
+  for _ = 1:population_size
+    push!(population.individuals, Individual([0], rand(1:10000, fitness_length)))
   end
 
   sorts = non_dominated_sort(population)
@@ -135,7 +125,6 @@ function test_non_dominated_sort(population_size::Int, fitness_length::Int)
 end
 
 
-
 function test_evaluate_against_others(population_size::Int,
                                       fitness_length::Int,
                                       compare_method = non_dominated_compare)
@@ -143,13 +132,13 @@ function test_evaluate_against_others(population_size::Int,
   # generate the population
   population = Population()
   for _ =  1: population_size
-    push!(population.individuals, Individual([42],create_random_fitness(fitness_length)))
+    push!(population.individuals, Individual([42],rand(1:10000, fitness_length)))
   end
 
   # evaluate all individuals
   domination_information = (Int, Int, Vector{Int})[]
   for index = 1:population_size
-    push!(domination_information, evaluate_against_others(population.individuals, index, compare_method))
+    push!(domination_information, evaluate_against_others(population, index, compare_method))
   end
 
   # verify that the domination relations computed make sense
@@ -167,7 +156,6 @@ function test_evaluate_against_others(population_size::Int,
 end
 
 
-
 function test_calculate_crowding_distance()
   #create populationulation
   population = Population()
@@ -183,7 +171,7 @@ function test_calculate_crowding_distance()
   domination_fronts = non_dominated_sort(population)
 
   # calculate crowding distances
-  merge!(calculate_crowding_distance(population, domination_fronts[1], 1), population.crowding_distances)
+  merge!(population.crowding_distances, calculate_crowding_distance(population, domination_fronts[1], 1))
 
   # test against manually calculated values
   @test population.crowding_distances[[0,5]] == (1,Inf)
@@ -192,7 +180,6 @@ function test_calculate_crowding_distance()
   @test population.crowding_distances[[5,0]] == (1,Inf)
 
 end
-
 
 
 function test_all()
@@ -207,7 +194,7 @@ function test_all()
   true
 end
 
-# 
+
 # function test_main(n::Int)
 #   # uses the 0-1 sum to check it does indeed optimize
 #   allele = [0,1]

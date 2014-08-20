@@ -447,7 +447,8 @@ end
 function add_to_hall_of_fame(population::Population,
                              indices::Vector{Int},
                              hall_of_fame::HallOfFame,
-                             max_hall_of_fame_size)
+                             comparison_operator::Function,
+                             max_hall_of_fame_size::Int)
   # add the best individuals to the hall of fame population to save them for
   # further examination. we merge the first front of the actual population
   # with the rest of the hall of fame to then select the first front of it.
@@ -455,7 +456,7 @@ function add_to_hall_of_fame(population::Population,
   hall_of_fame.individuals = vcat(hall_of_fame.individuals, population.individuals[indices])
 
   # acquire the domination information
-  domination_information = map(x -> evaluate_against_others(hall_of_fame, x, non_dominated_compare), range(1, length(hall_of_fame.individuals)))
+  domination_information = map(x -> evaluate_against_others(hall_of_fame, x, comparison_operator), range(1, length(hall_of_fame.individuals)))
 
 
   # filter the dominated individuals
