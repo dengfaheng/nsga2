@@ -1,5 +1,3 @@
-module NSGA_II
-
 
 # Implementation of the NSGA-II multiobjective
 # genetic algorithm as described in:
@@ -55,22 +53,20 @@ type Population
   function Population(individuals::Vector{Individual})
     # initialize with individuals but no crowding_distances
     @assert length(individuals) != 0
-    d = Dict{Vector, (Int, FloatingPoint)}()
-    self = new(individuals, d)
+    self = new(individuals, Dict{Vector, (Int, FloatingPoint)}())
   end
 
   function Population(individuals::Vector{Individual},
                       crowding_distances::Dict{Vector, (Int, FloatingPoint)})
     # initialize with individuals and crowding_distances
     @assert length(individuals) != 0
-    @assert length(distances) != 0
+    @assert length(crowding_distances) != 0
     self = new(individuals, crowding_distances)
   end
 end
 
 
-# hall of fame is a special population to keep
-# the best individuals of all generations
+# special population to keep the best individuals of all generations
 typealias HallOfFame Population
 
 
@@ -84,49 +80,48 @@ typealias HallOfFame Population
 #BEGIN helper methods
 
 
-function non_dominated_compare(a::Vector, b::Vector, comparator = >)
+function non_dominated_compare(first::Vector, second::Vector, comparator = >)
   # non domination comparison operator
   # ([0, 0, 2]  > [0, 0, 1]) =  1
   # ([0, 0, 1] == [0, 1, 0]) =  0
   # ([1, 0, 1]  < [1, 1, 1]) = -1
-  @assert length(a) == length(b) "gene vectors must be of same length"
-  AdomB = false
-  BdomA = false
-  for i in zip(a,b)
-    if i[1] != i[2]
-      if(comparator(i[1], i[2]))
-        AdomB = true
+  @assert length(first) == length(second) "gene vectors must be of same length"
+  first_dominates::Bool = false
+  second_dominates::Bool = false
+  for (i, j) in zip(first,second)
+    if i != j
+      if(comparator(i, j))
+        first_dominates = true
       else
-        BdomA = true
+        second_dominates = true
       end
     end
-    if AdomB && BdomA  # immediate return if nondominated
+    if first_dominates && second_dominates  # immediate return if nondominated
       return 0
     end
   end
 
-  if AdomB
+  if first_dominates
     return 1
   end
-  if BdomA
+  if second_dominates
     return -1
   end
-  if !AdomB && !BdomA
+  if (! first_dominates) && (! second_dominates)
     return 0
   end
 end
 
 
-function population_init{T}(initializing_function::Function,
-                            fitness_function::Function,
-                            population_size::Int)
+function population_init(initializing_function::Function,
+                         fitness_function::Function,
+                         population_size::Int)
   # used to initialize the first population in the main loop
   # initializing_function must return a vector
   @assert population_size > 0 "population size doesn't make sense"
   population = Population()
   for _ = 1:population_size
-    gene_vector = initializing_function()
-    push!(population, Individual(gene_vector, fitness_function(gene_vector)))
+    push!(population, Individual(initializing_function(), fitness_function(gene_vector)))
   end
   population
 end
@@ -136,15 +131,16 @@ function evaluate_against_others(population::Population,
                                  self_index::Int,
                                  compare_method::Function)
   # compare the fitness of individual individual at index with rest of the population
-  domination_count = 0
+  @assert 0 < self_index <= length(population.individuals)
+  domination_count::Int = 0
   dominated_by = Int[]
-  self_fitness = population.individuals[index].fitness
+  self_fitness::Vector = population.individuals[self_index].fitness
 
-  for (i, other) in enumerate(population.individuals)
-    if(i != self_index)
+  for (index, other) in enumerate(population.individuals)
+    if(index != self_index)
       if compare_method(other.fitness, self_fitness) == 1
         domination_count += 1
-        push!(dominated_by, i)
+        push!(dominated_by, index)
       end
     end
   end
@@ -153,14 +149,14 @@ function evaluate_against_others(population::Population,
 end
 
 
-function fast_delete{T}(array::Vector{T}, to_delete::Vector{T})
+function fast_delete(array::Vector{Int}, to_delete::Vector{Int})
   # we take advantage of the knowledge that both vectors are sorted
   # makes it about 40x faster than setdiff
   # the cost of verifying that the arrays
   @assert issorted(array)
   @assert issorted(to_delete)
   result = Int[]
-  deletion_index = 1
+  deletion_index::Int = 1
   for i in array
     # iterate to the next valid index, value >= to i
     while (to_delete[deletion_index] < i) && (deletion_index < length(to_delete))
@@ -174,14 +170,14 @@ function fast_delete{T}(array::Vector{T}, to_delete::Vector{T})
 end
 
 
-function non_dominated_sort(double_population::Population,
+function non_dominated_sort(population::Population,
                             comparison_operator = non_dominated_compare)
   # sort population into m nondominating fronts (best to worst)
   # until at least half the original number of individuals is put in a front
 
   # get number of individuals to keep
-  population_size = length(population.individuals)
-  cutoff = population_size / 2
+  population_size::Int = length(population.individuals)
+  cutoff::Int = ceil(population_size / 2)
 
   # get domination information
   # (individual_index, domination_count, dominated_by)
@@ -212,12 +208,11 @@ function non_dominated_sort(double_population::Population,
 
     # push the current front to the result
     push!(fronts_to_indices, current_front_indices)
+    domination_information = (Int, Int, Vector{Int})[]
 
     # remove the indices of the current front from the dominated individuals
     for (index, domination_count, dominated_by) in tmp_domination_information
-      #remove indices from the current front
       substracted = fast_delete(dominated_by, current_front_indices)
-      #substract the difference of cardinality
       push!(domination_information, (index, length(substracted), substracted))
     end
   end
@@ -410,9 +405,9 @@ function unique_fitness_tournament_selection(population::Population)
     # or select a subset of them. depends on how many new parents we still need to add
     k = min((2*(population_size - length(selected_parents))), length(fitness_to_index))
 
-    # sample k fitnesses and get their (front, crowing) from population.distances
+    # sample k fitnesses and get their (front, crowing) from population.crowding_distances
     candidate_fitnesses = select_without_replacement(fitnesses, k)
-    front_and_crowding = map(x->population.distances[x], candidate_fitnesses)
+    front_and_crowding = map(x->population.crowding_distances[x], candidate_fitnesses)
 
     # choose the fitnesses
     chosen_fitnesses = Vector[]
@@ -534,7 +529,7 @@ function main(initialize_population::Function,
         last_front = domination_fronts[end]
         domination_fronts = domination_fronts[1: (end - 1)]
 
-        for (index, front) in enmuerate(domination_fronts)
+        for (index, front) in enumerate(domination_fronts)
           # update the crowding distances
           merge!(population.crowding_distances, calculate_crowding_distance(merged_population, front, index))
         end
@@ -546,7 +541,7 @@ function main(initialize_population::Function,
         selected_indices = last_front_selection(merged_population, last_front, to_select)
 
         # update the crowding distance on the last front
-        merge!(merged_population.crowding_distances, calculate_crowding_distance(merged_population, selectedFromLastFront, indexOfLastFront))
+        merge!(merged_population.crowding_distances, calculate_crowding_distance(merged_population, selected_indices, length(domination_fronts) + 1))
 
         # put the indices of the individuals in all
         # fronts that were selected as parents
@@ -554,7 +549,7 @@ function main(initialize_population::Function,
     end
 
     parent_population = Population(merged_population.individuals[selected_indices],
-                                  merged_population.distances)
+                                  merged_population.crowding_distances)
 
 
     #we make a tournament selection to select children
