@@ -195,6 +195,7 @@ function test_all()
 end
 
 
+
 # function test_main(n::Int)
 #   # uses the 0-1 sum to check it does indeed optimize
 #   allele = [0,1]

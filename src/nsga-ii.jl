@@ -228,16 +228,14 @@ function calculate_crowding_distance(population::Population,
   # solution to its immediate neighbors of the same front. it is used
   # to preserve diversity, later in the algorithm.
 
-  # get the fitnesses from the individuals of the front
   fitnesses = map(ind->ind.fitness, population.individuals[front_indices])
 
-  # calculate mapping {fitness => crowding_distance}
+  # initialize the mapping {fitness => crowding_distance}
   fitness_to_crowding = Dict{Vector, (Int, FloatingPoint)}()
   for fitness in fitnesses
     fitness_to_crowding[fitness] = (front_index, 0.0)
   end
 
-  # get how many fitnesses and objectives we have
   fitness_keys = collect(keys(fitness_to_crowding))
   fitness_length = length(fitness_keys[1])
 
@@ -303,12 +301,12 @@ function last_front_selection(population::Population,
   # in decreasing order of crowding distance
   chosen_indices = Int[]
 
-  position = 1
+  position::Int = 1
   while length(chosen_indices) < to_select
-    len = length(fitness_to_index[fitness_to_crowding[position]])
+    len::Int = length(fitness_to_index[fitness_to_crowding[position]])
 
     if len > 1  # multiple individuals with same fitness
-      sample = rand(1:len)
+      sample::Int = rand(1:len)
       index = fitness_to_index[fitness_to_crowding[position]][sample]
       push!(chosen_indices, index)
       # individuals can be picked only once
