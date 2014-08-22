@@ -119,7 +119,7 @@ function population_init(initializing_function::Function,
   # used to initialize the first population in the main loop
   # initializing_function must return a vector
   @assert population_size > 0 "population size doesn't make sense"
-  population = Population()
+  population::Population = Population()
   for _ = 1:population_size
     push!(population, Individual(initializing_function(), fitness_function(gene_vector)))
   end
@@ -181,12 +181,13 @@ function non_dominated_sort(population::Population,
 
   # get domination information
   # (individual_index, domination_count, dominated_by)
-  domination_information = (Int, Int, Vector{Int})[]
+  domination_information::Vector{(Int, Int, Vector{Int})} = (Int, Int, Vector{Int})[]
+  tmp_domination_information::Vector{(Int, Int, Vector{Int})}
   for index = 1:population_size
     push!(domination_information, evaluate_against_others(population, index, comparison_operator))
   end
 
-  fronts_to_indices = Vector{Int}[]
+  fronts_to_indices::Vector{Vector{Int}} = Vector{Int}[]
 
   # iteratively find undominated individuals and separate them from the rest
   # until there are at least half of the double population in them
@@ -478,6 +479,65 @@ function add_to_hall_of_fame(population::Population,
   end
 end
 
+
+function uniform_mutation_population(population::Population,
+                                     mutation_function::Function,
+                                     mutation_probability::FloatingPoint)
+  new_population::Population = Population()
+  population_size::Int = length(population.individuals)
+  for (index, individual) in enumerate(population.individuals)
+    if rand() < mutation_probability  # mutate
+      self_genes = deepcopy(individual.genes)
+      self_genes = mutation_function(self_genes)
+      push!(new_population, Individual(self_genes, [0]))
+    else
+      push!(new_population, Individual(deepcopy(individual.genes, [0])))
+    end
+  end
+  new_population
+end
+
+
+function uniform_crossover_population(population::Population,
+                                      crossover_probability::FloatingPoint)
+  new_population::Population = Population()
+  population_size::Int = length(population.individuals)
+  for(index, individual) in enumerate(population.individuals)
+    if rand() < crossover_probability  # crossover
+      self_genes = deepcopy(individual.genes)
+      other_genes = deepcopy(population.individuals[rand(1:population_size)])
+      for gene_index = rand(1:length(self_genes)):length(self_genes)
+        self_genes[gene_index] = other_genes[gene_index]
+      end
+      push!(new_population, Individual(self_genes, [0]))
+
+    else
+      push!(new_population, Individual(deepcopy(individual.genes), [0]))
+    end
+  end
+  new_population
+end
+
+
+function one_point_crossover_population(population::Population,
+                                        crossover_population::FloatingPoint)
+  new_population::Population = Population()
+  population_size::Int = length(population.individuals)
+  for(index, individual) in enumerate(population.individuals)
+    if rand() < crossover_probability  # crossover
+      self_genes = deepcopy(individual.genes)
+      other_genes = deepcopy(population.individuals[rand(1:population_size)])
+      for gene_index = rand(1:length(self_genes)):length(self_genes)
+        self_genes[gene_index] = other_genes[gene_index]
+      end
+      push!(new_population, Individual(self_genes, [0]))
+
+    else
+      push!(new_population, Individual(deepcopy(individual.genes), [0]))
+    end
+  end
+  new_population
+end
 
 #END
 #------------------------------------------------------------------------------
