@@ -11,8 +11,6 @@
 # Pages 623-630
 
 
-include("genetic_operators.jl")
-
 
 #------------------------------------------------------------------------------
 #BEGIN type definitions
@@ -80,7 +78,7 @@ typealias HallOfFame Population
 #BEGIN helper methods
 
 
-function non_dominated_compare(first::Vector, second::Vector, comparator = >)
+function non_dominated_compare{T}(first::Vector{T}, second::Vector{T}, comparator = >)
   # non domination comparison operator
   # ([0, 0, 2]  > [0, 0, 1]) =  1
   # ([0, 0, 1] == [0, 1, 0]) =  0
@@ -155,9 +153,9 @@ function fast_delete(array::Vector{Int}, to_delete::Vector{Int})
   # the cost of verifying that the arrays
   @assert issorted(array)
   @assert issorted(to_delete)
-  result = Int[]
+  result::Vector{Int} = Int[]
   deletion_index::Int = 1
-  for i in array
+  for i::Int in array
     # iterate to the next valid index, value >= to i
     while (to_delete[deletion_index] < i) && (deletion_index < length(to_delete))
       deletion_index += 1
@@ -182,8 +180,8 @@ function non_dominated_sort(population::Population,
   # get domination information
   # (individual_index, domination_count, dominated_by)
   domination_information::Vector{(Int, Int, Vector{Int})} = (Int, Int, Vector{Int})[]
-  tmp_domination_information::Vector{(Int, Int, Vector{Int})}
-  for index = 1:population_size
+  tmp_domination_information::Vector{(Int, Int, Vector{Int})} = (Int, Int, Vector{Int})[]
+  for index::Int = 1:population_size
     push!(domination_information, evaluate_against_others(population, index, comparison_operator))
   end
 
@@ -397,7 +395,7 @@ function unique_fitness_tournament_selection(population::Population)
   end
 
   # else we must select parents
-  selected_parents = individual[]
+  selected_parents::Vector{Individual} = individual[]
 
   while length(selected_parents) != population_size
     # we either pick all the fitnesses and select a random individual from them

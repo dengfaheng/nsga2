@@ -65,9 +65,36 @@ function test_fast_delete_speed(test_size::Int)
 
   println("fast delete function")
   @time test_fd(fast_delete, vectors)
-  println("set difference function")
-  @time test_fd(setdiff, vectors)
+  println("untyped fast delete")
+  @time test_fd(fast_delete_2, vectors)
 end
+
+
+
+
+function fast_delete_2(array::Vector, to_delete::Vector)
+  # we take advantage of the knowledge that both vectors are sorted
+  # makes it about 40x faster than setdiff
+  # the cost of verifying that the arrays
+  @assert issorted(array)
+  @assert issorted(to_delete)
+  result= Int[]
+  deletion_index = 1
+  for i in array
+    # iterate to the next valid index, value >= to i
+    while (to_delete[deletion_index] < i) && (deletion_index < length(to_delete))
+      deletion_index += 1
+    end
+    if i != to_delete[deletion_index]
+      push!(result, i)
+    end
+  end
+  result
+end
+
+
+
+
 
 
 function test_fast_delete_correctness(test_size::Int, vector_size::Int)
