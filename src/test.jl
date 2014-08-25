@@ -1,5 +1,5 @@
 
-include("nsga-ii.jl")
+include("nsga2.jl")
 using Base.Test
 
 
