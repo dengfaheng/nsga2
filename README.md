@@ -10,6 +10,7 @@ Revisiting the NSGA-II crowding-distance computation
  Felix-Antoine Fortin
  Marc Parizeau
  Universite Laval, Quebec, PQ, Canada
- GECCO '13 Proceeding of the fifteenth annual conference on Genetic and evolutionary computation conference
+ GECCO '13 Proceeding of the fifteenth annual conference 
+ on Genetic and evolutionary computation conference
  Pages 623-630
 ~~~
