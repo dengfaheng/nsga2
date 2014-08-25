@@ -441,7 +441,7 @@ function generate_children(individuals::Vector{Individual},
 end
 
 
-function add_to_hall_of_fame(population::Population,
+function add_to_hall_of_fame!(population::Population,
                              indices::Vector{Int},
                              hall_of_fame::HallOfFame,
                              comparison_operator::Function,
@@ -558,23 +558,23 @@ function main(initialize_population::Function,
   @assert max_hall_of_fame_size >= 0
 
   # hall of fame will keep 
-  hall_of_fame = HallOfFame()
+  hall_of_fame::HallOfFame = HallOfFame()
 
   # initialize two populations
-  initial_population = initializePopulation(alleles, fitness_function, population_size)
-  previous_population = initializePopulation(alleles, fitness_function, population_size)
+  initial_population::Population  = initializePopulation(alleles, fitness_function, population_size)
+  previous_population::Population = initializePopulation(alleles, fitness_function, population_size)
 
   # merge them
-  merged_population = Population(vcat(initial_population.individuals, previous_population.individuals))
+  merged_population::Population = Population(vcat(initial_population.individuals, previous_population.individuals))
 
   # main loop: |selection -> generation| -> |selection -> generation| -> ...
-  for iteration = 1:number_of_generations
+  for iteration::Int = 1:number_of_generations
 
     # sort the merged population into non dominated fronts
-    domination_fronts = non_dominated_sort(merged_population)
+    domination_fronts::Vector{Vector{Int}} = non_dominated_sort(merged_population)
 
     # add the best individuals to the hall of fame
-    add_to_hall_of_fame(merged_population, domination_fronts[1], hall_of_fame)
+    add_to_hall_of_fame!(merged_population, domination_fronts[1], hall_of_fame)
 
 
     if length(domination_fronts) == 1 || length(domination_fronts[1]) >= population_size
@@ -584,7 +584,7 @@ function main(initialize_population::Function,
     else
         # separate last front from rest, it is treated differently with
         last_front = domination_fronts[end]
-        domination_fronts = domination_fronts[1: (end - 1)]
+        domination_fronts = domination_fronts[1:(end - 1)]
 
         for (index, front) in enumerate(domination_fronts)
           # update the crowding distances
@@ -592,10 +592,10 @@ function main(initialize_population::Function,
         end
 
         # calculate how many individuals are left to select (there's n-k in the previous fronts)
-        to_select = population_size - length(reduce(vcat, domination_fronts))
+        to_select::Int = population_size - length(reduce(vcat, domination_fronts))
 
         # find the indices of the k individuals we need from the last front
-        selected_indices = last_front_selection(merged_population, last_front, to_select)
+        selected_indices::Vector{Int} = last_front_selection(merged_population, last_front, to_select)
 
         # update the crowding distance on the last front
         merge!(merged_population.crowding_distances, calculate_crowding_distance(merged_population, selected_indices, length(domination_fronts) + 1))
@@ -610,11 +610,8 @@ function main(initialize_population::Function,
 
 
     #we make a tournament selection to select children
-    #the templates are actual parents
-    individuals = unique_fitness_tournament_selection(parent_population)
-
     # apply genetic operators (recomination and mutation) to obtain next pop
-    next_population = generate_children(individuals, mutate_population, crossover_population, evaluation_population)
+    next_population = generate_children(unique_fitness_tournament_selection(parent_population), mutate_population, crossover_population, evaluation_population)
 
     merged_population = Population(vcat(next_population.individuals, previous_population.individuals))
     previous_population = next_population
