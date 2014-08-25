@@ -169,7 +169,7 @@ end
 
 
 function non_dominated_sort(population::Population,
-                            comparison_operator = non_dominated_compare)
+                            comparison_operator::Function = non_dominated_compare)
   # sort population into m nondominating fronts (best to worst)
   # until at least half the original number of individuals is put in a front
 
