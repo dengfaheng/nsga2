@@ -93,10 +93,6 @@ function fast_delete_2(array::Vector, to_delete::Vector)
 end
 
 
-
-
-
-
 function test_fast_delete_correctness(test_size::Int, vector_size::Int)
 
   function slow_delete(array::Vector, to_delete::Vector)
@@ -153,9 +149,7 @@ end
 
 
 function test_evaluate_against_others(population_size::Int,
-                                      fitness_length::Int,
-                                      compare_method = non_dominated_compare)
-
+                                      fitness_length::Int)
   # generate the population
   population = Population{Vector{Int}, Int}()
   for _ =  1: population_size
@@ -165,7 +159,7 @@ function test_evaluate_against_others(population_size::Int,
   # evaluate all individuals
   domination_information = (Int, Int, Vector{Int})[]
   for index = 1:population_size
-    push!(domination_information, evaluate_against_others(population, index, compare_method))
+    push!(domination_information, evaluate_against_others(population, index))
   end
 
   # verify that the domination relations computed make sense
@@ -174,7 +168,7 @@ function test_evaluate_against_others(population_size::Int,
       for dominator_index in dominators
         dominated_fitness = population.individuals[index].fitness
         dominating_fitness = population.individuals[dominator_index].fitness
-        @test compare_method(dominating_fitness, dominated_fitness) == 1
+        @test non_dominated_compare(dominating_fitness, dominated_fitness) == 1
       end
     end
   end
@@ -198,7 +192,7 @@ function test_calculate_crowding_distance()
   domination_fronts = non_dominated_sort(population)
 
   # calculate crowding distances
-  merge!(population.crowding_distances, calculate_crowding_distance{Int, Int}(population, domination_fronts[1], 1))
+  merge!(population.crowding_distances, calculate_crowding_distance(population, domination_fronts[1], 1))
 
   # test against manually calculated values
   @test population.crowding_distances[[0,5]] == (1,Inf)
@@ -214,8 +208,9 @@ function test_all()
   test_non_dominated_compare(500,3)
   test_evaluate_against_others(500,5)
   test_fast_delete_correctness(1000,1000)
+  test_calculate_crowding_distance()
   test_non_dominated_sort(500, 3)
-  test_calculate_crowding_distance{Int, Int}()
+  
   println("All unit tests succeeded")
 
   true

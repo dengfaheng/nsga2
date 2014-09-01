@@ -114,18 +114,15 @@ function initialize_population!{A, B}(population::Population{A, B},
 end
 
 
-function evaluate_against_others{A, B}(population::Population{A, B},
-                                       self_index::Int,
-                                       compare_method::Function)
+function evaluate_against_others{A, B}(population::Population{A, B}, self_index::Int)
   # compare fitness of individual individual at index with rest of population
-  @assert 0 < self_index <= length(population.individuals)
   domination_count::Int = 0
   dominated_by::Vector{Int} = Int[]
   self_fitness::Vector{B} = population.individuals[self_index].fitness
 
   for (index, other) in enumerate(population.individuals)
     if(index != self_index)
-      if compare_method(other.fitness, self_fitness) == 1
+      if non_dominated_compare(other.fitness, self_fitness) == 1
         domination_count += 1
         push!(dominated_by, index)
       end
@@ -167,7 +164,7 @@ function non_dominated_sort{A, B}(population::Population{A, B})
   domination_information::Vector{(Int, Int, Vector{Int})} = (Int, Int, Vector{Int})[]
   tmp_domination_information::Vector{(Int, Int, Vector{Int})} = (Int, Int, Vector{Int})[]
   for index::Int = 1:population_size
-    push!(domination_information, evaluate_against_others{A, B}(population, index, non_dominated_compare))
+    push!(domination_information, evaluate_against_others(population, index))
   end
 
   fronts_to_indices::Vector{Vector{Int}} = Vector{Int}[]
@@ -225,7 +222,7 @@ function calculate_crowding_distance{A, B}(population::Population{A, B},
   fitness_length::Int = length(fitness_keys[1])
 
   # sort in decreasing order the fitness vectors for each objective
-  sorted_by_objective::Vector{Vector{B}} = Vector{B}[]
+  sorted_by_objective::Vector{Vector{Vector{B}}} = Vector{Vector{B}}[]
   objective_range::Vector{B} = B[]
 
   for i = 1:fitness_length
@@ -435,7 +432,7 @@ function add_to_hall_of_fame!{A, B}(population::Population{A, B},
   hall_of_fame.individuals = vcat(hall_of_fame.individuals, population.individuals[indices])
 
   # acquire the domination information
-  domination_information = map(x->evaluate_against_others{A, B}(hall_of_fame, x, non_dominated_compare), range(1, length(hall_of_fame.individuals)))
+  domination_information = map(x->evaluate_against_others(hall_of_fame, x), range(1, length(hall_of_fame.individuals)))
 
 
   # filter the dominated individuals
@@ -459,6 +456,15 @@ function add_to_hall_of_fame!{A, B}(population::Population{A, B},
   end
 end
 
+
+#END
+#------------------------------------------------------------------------------
+
+
+
+
+#------------------------------------------------------------------------------
+#BEGIN misc
 
 function uniform_mutation_population{A, B}(population::Population{A, B},
                                            mutate::Function,
@@ -528,13 +534,15 @@ end
 #------------------------------------------------------------------------------
 #BEGIN main
 
-function nsga2{A, B}(initialize_genes::Function,
-                     evaluate_genes::Function,
-                     population_size::Int,
-                     crossover_population::Function,
-              mutate_population::Function,
-              number_of_generations::Int,
-              max_hall_of_fame_size::Int)
+function nsga2{A<:Type, B<:Type}(gene_type::A,
+                                 fitness_type::B,
+                                 initialize_genes::Function,
+                                 evaluate_genes::Function,
+                                 population_size::Int,
+                                 crossover_population::Function,
+                                 mutate_population::Function,
+                                 number_of_generations::Int,
+                                 max_hall_of_fame_size::Int)
   @assert population_size > 0
   @assert number_of_generations >= 0
   @assert max_hall_of_fame_size >= 0
