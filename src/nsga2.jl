@@ -13,7 +13,7 @@
 
 
 #------------------------------------------------------------------------------
-#BEGIN type definitions
+#BEGIN types
 
 
 immutable Individual{A, B}
@@ -52,7 +52,7 @@ type Population{A, B}
 end
 
 
-# special population to keep the best individuals of all generations
+# special population that keep the best individuals of all generations
 typealias HallOfFame Population
 
 
@@ -63,11 +63,52 @@ typealias HallOfFame Population
 
 
 #------------------------------------------------------------------------------
-#BEGIN helper methods
+#BEGIN misc methods
+
+
+function select_without_replacement{T}(vector::Vector{T}, k::Int)
+  # take k elements from L without replacing
+  result = T[]
+  vector = deepcopy(vector)
+  vector_length = length(vector)
+  if k == vector_length
+    return vector
+  end
+
+  for _ = 1:k
+    index = rand(1:vector_length)
+    push!(result, vector[index])
+    deleteat!(vector, index)
+    vector_length -= 1
+  end
+
+  result
+end
+
+
+function fast_delete(array::Vector{Int}, to_delete::Vector{Int})
+  # we take advantage of the knowledge that both vectors are sorted
+  # makes it O(n)
+  @assert issorted(array)
+  @assert issorted(to_delete)
+  result::Vector{Int} = Int[]
+  deletion_index::Int = 1
+  for i::Int in array
+    # iterate to the next valid index, value >= to i
+    while (to_delete[deletion_index] < i) && (deletion_index < length(to_delete))
+      deletion_index += 1
+    end
+    if i != to_delete[deletion_index]
+      push!(result, i)
+    end
+  end
+  result
+end
 
 
 function non_dominated_compare{B}(first::Vector{B}, second::Vector{B})
   # non domination comparison operator
+  # used to tell wether first vector is "better" than the second
   # ([0, 0, 2]  > [0, 0, 1]) =  1
   # ([0, 0, 1] == [0, 1, 0]) =  0
   # ([1, 0, 1]  < [1, 1, 1]) = -1
@@ -99,23 +140,9 @@ function non_dominated_compare{B}(first::Vector{B}, second::Vector{B})
 end
 
 
-function initialize_population!{A, B}(population::Population{A, B},
-                                      initialize_genes::Function,
-                                      evaluate_genes::Function,
-                                      population_size::Int)
-  # used to initialize the first population in the main loop
-  # initialize_individual must return an individual
-  @assert population_size > 0 "population size doesn't make sense"
-  for _ = 1:population_size
-    genes::A = initialize_genes()
-    fitness::Vector{B} = evaluate_genes(genes)
-    push!(population.individuals, Individual{A, B}(genes, fitness))
-  end
-end
-
-
 function evaluate_against_others{A, B}(population::Population{A, B}, self_index::Int)
   # compare fitness of individual individual at index with rest of population
+  # used to figure out domination fronts
   domination_count::Int = 0
   dominated_by::Vector{Int} = Int[]
   self_fitness::Vector{B} = population.individuals[self_index].fitness
@@ -133,23 +160,28 @@ function evaluate_against_others{A, B}(population::Population{A, B}, self_index:
 end
 
 
-function fast_delete(array::Vector{Int}, to_delete::Vector{Int})
-  # we take advantage of the knowledge that both vectors are sorted
-  # makes it O(n)
-  @assert issorted(array)
-  @assert issorted(to_delete)
-  result::Vector{Int} = Int[]
-  deletion_index::Int = 1
-  for i::Int in array
-    # iterate to the next valid index, value >= to i
-    while (to_delete[deletion_index] < i) && (deletion_index < length(to_delete))
-      deletion_index += 1
-    end
-    if i != to_delete[deletion_index]
-      push!(result, i)
-    end
+#END
+#------------------------------------------------------------------------------
+
+
+
+
+#------------------------------------------------------------------------------
+#BEGIN population methods
+
+
+function initialize_population!{A, B}(population::Population{A, B},
+                                      initialize_genes::Function,
+                                      evaluate_genes::Function,
+                                      population_size::Int)
+  # used to initialize the first population in the main loop
+  # initialize_individual must return an individual
+  @assert population_size > 0 "population size doesn't make sense"
+  for _ = 1:population_size
+    genes::A = initialize_genes()
+    fitness::Vector{B} = evaluate_genes(genes)
+    push!(population.individuals, Individual{A, B}(genes, fitness))
   end
-  result
 end
 
 
@@ -310,29 +342,10 @@ function last_front_selection{A, B}(population::Population{A, B},
 end
 
 
-function select_without_replacement{T}(vector::Vector{T}, k::Int)
-  # take k elements from L without replacing
-  result = T[]
-  vector = deepcopy(vector)
-  vector_length = length(vector)
-  if k == vector_length
-    return vector
-  end
-
-  for _ = 1:k
-    index = rand(1:vector_length)
-    push!(result, vector[index])
-    deleteat!(vector, index)
-    vector_length -= 1
-  end
-
-  result
-end
-
-
-function crowded_compare(first ::(Int, FloatingPoint), second::(Int, FloatingPoint))
+function crowded_compare(first::(Int, FloatingPoint), second::(Int, FloatingPoint))
   # crowded comparison operator
   # (rank, crowding distance)
+  # used to choose between solutions in tournament selection
   # if rank is the same, tie break with crowding distance
   # if same distance choose randomly
   @assert first[2] >= 0
@@ -357,7 +370,6 @@ end
 function unique_fitness_tournament_selection{A, B}(population::Population{A, B})
   # select across entire range of fitnesses to avoid
   # bias by reoccuring fitnesses
-
   population_size::Int = length(population.individuals)
 
   # map fitness => indices
@@ -383,7 +395,7 @@ function unique_fitness_tournament_selection{A, B}(population::Population{A, B})
     k = min((2*(population_size - length(selected_parents))), length(fitness_to_index))
 
     # sample k fitnesses and get their (front, crowing) from population.crowding_distances
-    candidate_fitnesses = select_without_replacement{B}(fitnesses, k)
+    candidate_fitnesses = select_without_replacement(fitnesses, k)
     front_and_crowding = map(x->population.crowding_distances[x], candidate_fitnesses)
 
     # choose the fitnesses
@@ -407,15 +419,15 @@ function unique_fitness_tournament_selection{A, B}(population::Population{A, B})
 end
 
 
-function generate_children(individuals::Vector{Individual},
-                           mutate_population::Function,
-                           crossover_population::Function,
-                           evaluation_population::Function)
+function generate_children{A, B}(individuals::Vector{Individual{A, B}},
+                                 mutate_population::Function,
+                                 crossover_population::Function,
+                                 evaluation_population::Function)
   # final step of the generation, apply mutation and crossover to yield new children
   # both crossover and mutation functions must apply over entire populations
   # apply crossover, mutation
   # and then evaluation new individuals (can fill their fitness values with bogus until evaluation)
-  new_population = crossover_population(individuals)
+  new_population::Population{A, B} = crossover_population(individuals)
   new_population = mutate_population(new_population)
   new_population
 end
@@ -425,35 +437,32 @@ function add_to_hall_of_fame!{A, B}(population::Population{A, B},
                                     indices::Vector{Int},
                                     hall_of_fame::HallOfFame{A, B},
                                     max_hall_of_fame_size::Int)
-  # add the best individuals to the hall of fame population to save them for
-  # further examination. we merge the first front of the actual population
-  # with the rest of the hall of fame to then select the first front of it.
+  # add the best individuals to the hall of fame and select those who dominate
+  # filter out duplicates (same genes)
+  # unique fitness or same fitness and unique genes
 
   hall_of_fame.individuals = vcat(hall_of_fame.individuals, population.individuals[indices])
 
-  # acquire the domination information
-  domination_information = map(x->evaluate_against_others(hall_of_fame, x), range(1, length(hall_of_fame.individuals)))
+  # select the nondominated individuals
+  genes::Set{Vector{A}} = Set{Vector{A}}()
+  fitnesses::Set{Vector{B}} = Set{Vector{B}}()
+  selected_individuals::Vector{Individual{A, B}} = Individual{A, B}[]
 
-
-  # filter the dominated individuals
-  hall_of_fame.individuals = hall_of_fame.individuals[map(x->x[1], filter(x->x[2]==0, domination_information))]
-
-
-  # elmiminate duplicates genes (since it is elitist, same individuals may reappear)
-  selected_indices = Int[]
-  genes = Set{Vector}()
-  for (index, individual) in enumerate(hall_of_fame.individuals)
-    if !(individual.genes in genes)
-      push!(genes, individual.genes)
-      push!(selected_indices, index)
+  for (index, individual) in hall_of_fame.individuals
+    if evaluate_against_others(hall_of_fame.individuals, index)[2] == 0 &&  # non dominated
+       ((!(individual.fitness in fitnesses)) || (!(individual.genes in genes)))  # unique either in fitness or genes
+       push!(selected_individuals, individual)
+       push!(genes, individual.genes)
+       push!(fitnesses, individual.fitness)
     end
   end
 
-  hall_of_fame.individuals = hall_of_fame.individuals[selected_indices]
-
+  # select without replacement if hall of fame too big
   if length(hall_of_fame.individuals) > max_hall_of_fame_size
-    hall_of_fame.individuals = select_without_replacement(hall_of_fame.individuals, max_hall_of_fame_size)
+    selected_individuals = select_without_replacement(selected_individuals, max_hall_of_fame_size)
   end
+
+  hall_of_fame.individuals = selected_individuals
 end
 
 
@@ -464,7 +473,7 @@ end
 
 
 #------------------------------------------------------------------------------
-#BEGIN misc
+#BEGIN genetic operators
 
 function uniform_mutation_population{A, B}(population::Population{A, B},
                                            mutate::Function,
@@ -532,7 +541,7 @@ end
 
 
 #------------------------------------------------------------------------------
-#BEGIN main
+#BEGIN main loop
 
 function nsga2{A<:Type, B<:Type}(gene_type::A,
                                  fitness_type::B,
