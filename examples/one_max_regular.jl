@@ -4,10 +4,10 @@
 # the function is a combination of vector sum and position dependent scoring
 
 # fitness
-# fitness = (sum(vector), early_sum(vector))
+# fitness = (sum(vector), regular(vector))
 # sum simply sums the vector, the ideal being all 1
-# early sum favorizes 1 to the left
-
+# regular calculates function based on each gene being different from the precedent
+# e.g. [0, 1, 0, 1] or [1, 0, 1, 0]
 
 
 include("../src/nsga2.jl")
@@ -18,16 +18,19 @@ function evaluate_genes(genes::Vector{Int})
   # objective is to get as much 1 on the left of the vector
   # and as much 1 as possible in general
 
-  function early_sum(v::Vector{Int})
+  function regular(v::Vector{Int})
     # calculate early objective
-    total::FloatingPoint = 0.0
-    len::Int = length(v)
-    for (index, value) in enumerate(v)
-      total += value / (index / len)
+    index::Int = 1
+    total::Int = 0
+    while index < (length(v) - 1)
+      if v[index] != v[index+1]
+        total += 1
+      end
+      index+=1
     end
     total
   end
-  (sum(genes), early_sum(genes))
+  (sum(genes), regular(genes))
 end
 #END
 
