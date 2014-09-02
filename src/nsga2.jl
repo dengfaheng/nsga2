@@ -19,9 +19,9 @@
 immutable Individual{A, B}
   # individuals upon which the evolution acts
   genes::A
-  fitness::Vector{B}
+  fitness::B
 
-  function Individual(genes::A, fitness_values::Vector{B})
+  function Individual(genes::A, fitness_values::B)
     @assert length(fitness_values) != 0
     new(genes, fitness_values)
   end
@@ -35,18 +35,18 @@ end
 type Population{A, B}
   # includes a mapping of fitness values to crowding distance
   individuals::Vector{Individual{A, B}}
-  crowding_distances::Dict{Vector{B}, (Int, FloatingPoint)}
+  crowding_distances::Dict{B, (Int, FloatingPoint)}
 
   function Population()
-    new(Individual{A, B}[], Dict{Vector{B}, (Int, FloatingPoint)}())
+    new(Individual{A, B}[], Dict{B, (Int, FloatingPoint)}())
   end
 
   function Population(individuals::Vector{Individual{A, B}})
-    new(individuals, Dict{Vector{B}, (Int, FloatingPoint)}())
+    new(individuals, Dict{B, (Int, FloatingPoint)}())
   end
 
   function Population(individuals::Vector{Individual{A, B}},
-                      crowding_distances::Dict{Vector{B}, (Int, FloatingPoint)})
+                      crowding_distances::Dict{B, (Int, FloatingPoint)})
     new(individuals, crowding_distances)
   end
 end
@@ -68,7 +68,9 @@ typealias HallOfFame Population
 
 function select_without_replacement{T}(vector::Vector{T}, k::Int)
   # take k elements from L without replacing
-  result = T[]
+  @assert length(vector) >= k
+
+  result::Vector{T} = T[]
   vector = deepcopy(vector)
   vector_length = length(vector)
   if k == vector_length
@@ -106,7 +108,7 @@ function fast_delete(array::Vector{Int}, to_delete::Vector{Int})
 end
 
 
-function non_dominated_compare{B}(first::Vector{B}, second::Vector{B})
+function non_dominated_compare{B}(first::B, second::B)
   # non domination comparison operator
   # used to tell wether first vector is "better" than the second
   # ([0, 0, 2]  > [0, 0, 1]) =  1
@@ -145,7 +147,7 @@ function evaluate_against_others{A, B}(population::Population{A, B}, self_index:
   # used to figure out domination fronts
   domination_count::Int = 0
   dominated_by::Vector{Int} = Int[]
-  self_fitness::Vector{B} = population.individuals[self_index].fitness
+  self_fitness::B = population.individuals[self_index].fitness
 
   for (index, other) in enumerate(population.individuals)
     if(index != self_index)
@@ -179,7 +181,7 @@ function initialize_population!{A, B}(population::Population{A, B},
   @assert population_size > 0 "population size doesn't make sense"
   for _ = 1:population_size
     genes::A = initialize_genes()
-    fitness::Vector{B} = evaluate_genes(genes)
+    fitness::B = evaluate_genes(genes)
     push!(population.individuals, Individual{A, B}(genes, fitness))
   end
 end
@@ -239,23 +241,25 @@ function calculate_crowding_distance{A, B}(population::Population{A, B},
   # crowding distance measures the proximity of a solution to its neighbors
   # it is used to preserve diversity, later in the algorithm
 
-  fitnesses::Vector{Vector{B}} = Vector{B}[]
-  for individual in population.individuals
+  fitnesses::Vector{B} = B[]
+
+  front::Vector{Individual{A, B}} = population.individuals[front_indices]
+  for individual in front
     push!(fitnesses, individual.fitness)
   end
 
   # map fitness => crowding_distance
-  fitness_to_crowding::Dict{Vector{B}, (Int, FloatingPoint)} = Dict{Vector{B}, (Int, FloatingPoint)}()
+  fitness_to_crowding::Dict{B, (Int, FloatingPoint)} = Dict{B, (Int, FloatingPoint)}()
   for fitness in fitnesses
     fitness_to_crowding[fitness] = (front_index, 0.0)
   end
 
-  fitness_keys::Vector{Vector{B}} = collect(keys(fitness_to_crowding))
+  fitness_keys::Vector{B} = collect(keys(fitness_to_crowding))
   fitness_length::Int = length(fitness_keys[1])
 
   # sort in decreasing order the fitness vectors for each objective
-  sorted_by_objective::Vector{Vector{Vector{B}}} = Vector{Vector{B}}[]
-  objective_range::Vector{B} = B[]
+  sorted_by_objective::Vector{Vector{B}} = Vector{B}[]
+  objective_range::Vector{Number} = Number[]
 
   for i = 1:fitness_length
     sorted = sort(fitness_keys, by = x->x[i], rev = true)
@@ -296,43 +300,46 @@ function last_front_selection{A, B}(population::Population{A, B},
   # since individuals within the same front do not dominate each other, they are
   # selected based crowding distance (greater diversity is desired)
 
-  # map fitness => crowding distance
-  fitness_to_crowding::Dict{Vector{B}, FloatingPoint} = calculate_crowding_distance(population, last_frontIndices, -1)
-
   # map fitness => indices
-  fitness_to_index::Dict{Vector{B}, Vector{Int}} = Dict{Vector{B}, Vector{Int}}()
+  fitness_to_index::Dict{B, Vector{Int}} = Dict{B, Vector{Int}}()
+
   for index in indices
     fitness = population.individuals[index].fitness
     fitness_to_index[fitness] = push!(get(fitness_to_index, fitness, Int[]), index)
   end
 
-  # sort fitness by decreasing crowding distance
-  fitness_to_crowding = sort(collect(fitness_to_crowding), by = x->x[2], rev = true)
+  # map fitness => crowding distance
+  fitness_to_crowding::Dict{B, (Int, FloatingPoint)} = calculate_crowding_distance(population, indices, -1)
 
-  # choose individuals by iterating through unique fitness list
-  # in decreasing order of crowding distance
+  # sort fitness by decreasing crowding distance
+  ordered_fitnesses::Vector{B} = map(x->x[1], sort(collect(fitness_to_crowding), by=x->x[2][2], rev=true))
+
+  # choose individuals by iterating from best to worst (crowding distance)
   chosen_indices = Int[]
 
   position::Int = 1
   while length(chosen_indices) < to_select
-    len::Int = length(fitness_to_index[fitness_to_crowding[position]])
 
-    if len > 1  # multiple individuals with same fitness
-      sample::Int = rand(1:len)
-      index = fitness_to_index[fitness_to_crowding[position]][sample]
-      push!(chosen_indices, index)
-      # individuals can be picked only once
-      deleteat!(fitness_to_index[fitness_to_crowding[position]], sample)
-      j += 1
+    fitness::B = ordered_fitnesses[position]
+    len::Int = length(fitness_to_index[fitness])
 
-    else # single individual with this fitness
-      index = fitness_to_index[fitness_to_crowding[position]][1]
-      push!(chosen_indices, index)
-      deleteat!(fitness_to_crowding, position)
+    if len > 1  # multiple individuals with same fitness, sample one
+      sample_index::Int = rand(1:len)
+      real_index::Int = fitness_to_index[fitness][sample_index]
+      push!(chosen_indices, real_index)
+
+      # individuals can be picked only once, delete individual index after selection
+      deleteat!(fitness_to_index[ordered_fitnesses[position]], sample_index)
+      position += 1
+
+    else # single individual with this fitness, delete the fitness after selection
+      real_index = fitness_to_index[ordered_fitnesses[position]][1]
+      push!(chosen_indices, real_index)
+      deleteat!(ordered_fitnesses, position)
     end
 
     # wrap around
-    if position > length(fitness_to_crowding)
+    if position > length(ordered_fitnesses)
       position = 1
     end
   end
@@ -368,38 +375,37 @@ end
 
 
 function unique_fitness_tournament_selection{A, B}(population::Population{A, B})
-  # select across entire range of fitnesses to avoid
-  # bias by reoccuring fitnesses
+  # select across entire range of fitnesses to avoid bias by reoccuring fitness
   population_size::Int = length(population.individuals)
 
   # map fitness => indices
-  fitness_to_index::Dict{Vector{B}, Vector{Int}} = Dict{Vector{B}, Vector{Int}}()
-  for i = 1:population_size
-    value = get(fitness_to_index, population.individuals[i].fitness, Int[])
-    fitness_to_index[population.individuals[i].fitness] = push!(value, i)
+  fitness_to_index::Dict{B, Vector{Int}} = Dict{B, Vector{Int}}()
+  for (index, individual) in enumerate(population.individuals)
+    fitness_to_index[individual.fitness] = push!(get(fitness_to_index, individual.fitness, Int[]), index)
   end
 
-  fitnesses::Vector{Vector{B}} = collect(keys(fitness_to_index))
+  # get unique fitnesses
+  fitnesses::Vector{B} = collect(keys(fitness_to_index))
 
-  # edge case : only one fitness, return the population as it was
+  # edge case: only one fitness, return the population as it was
   if length(fitnesses) == 1
     return population.individuals
   end
 
   # else we must select parents
-  selected_parents::Vector{Individual{A, B}} = Individual{A, B}[]
+  selected_individuals::Vector{Individual{A, B}} = Individual{A, B}[]
 
-  while length(selected_parents) != population_size
+  while length(selected_individuals) != population_size
     # we either pick all the fitnesses and select a random individual from them
     # or select a subset of them. depends on how many new parents we still need to add
-    k = min((2*(population_size - length(selected_parents))), length(fitness_to_index))
+    k = min((2*(population_size - length(selected_individuals))), length(fitness_to_index))
 
     # sample k fitnesses and get their (front, crowing) from population.crowding_distances
-    candidate_fitnesses = select_without_replacement(fitnesses, k)
+    candidate_fitnesses::Vector{B} = select_without_replacement(fitnesses, k)
     front_and_crowding = map(x->population.crowding_distances[x], candidate_fitnesses)
 
     # choose the fitnesses
-    chosen_fitnesses::Vector{Vector{B}} = Vector{B}[]
+    chosen_fitnesses::Vector{B} = B[]
     i::Int = 1
     while i < k
       # crowded_compare returns an offset (0 if first solution is better, 1 otherwise)
@@ -409,26 +415,28 @@ function unique_fitness_tournament_selection{A, B}(population::Population{A, B})
     end
 
     # we now randomly choose an individual from the indices associated with the chosen fitnesses
-    for i in chosen_fitnesses
-      chosen_index = fitness_to_index[i][rand(1:length(fitness_to_index[i]))]
-      push!(selected_parents, population.individuals[chosen_index])
+    for fitness in chosen_fitnesses
+      chosen_index = fitness_to_index[fitness][rand(1:length(fitness_to_index[fitness]))]
+      push!(selected_individuals, population.individuals[chosen_index])
     end
 
   end
-  selected_parents
+  ret = Population{A, B}(selected_individuals)
+
 end
 
 
-function generate_children{A, B}(individuals::Vector{Individual{A, B}},
+function generate_children{A, B}(population::Population{A, B},
                                  mutate_population::Function,
-                                 crossover_population::Function,
-                                 evaluation_population::Function)
+                                 crossover_population::Function)
   # final step of the generation, apply mutation and crossover to yield new children
   # both crossover and mutation functions must apply over entire populations
   # apply crossover, mutation
   # and then evaluation new individuals (can fill their fitness values with bogus until evaluation)
-  new_population::Population{A, B} = crossover_population(individuals)
+
+  new_population::Population{A, B} = crossover_population(population)
   new_population = mutate_population(new_population)
+
   new_population
 end
 
@@ -444,12 +452,13 @@ function add_to_hall_of_fame!{A, B}(population::Population{A, B},
   hall_of_fame.individuals = vcat(hall_of_fame.individuals, population.individuals[indices])
 
   # select the nondominated individuals
-  genes::Set{Vector{A}} = Set{Vector{A}}()
-  fitnesses::Set{Vector{B}} = Set{Vector{B}}()
+  genes::Set{A} = Set{A}()
+  fitnesses::Set{B} = Set{B}()
   selected_individuals::Vector{Individual{A, B}} = Individual{A, B}[]
 
-  for (index, individual) in hall_of_fame.individuals
-    if evaluate_against_others(hall_of_fame.individuals, index)[2] == 0 &&  # non dominated
+  for index in 1:length(hall_of_fame.individuals)
+    individual::Individual{A, B} = hall_of_fame.individuals[index]
+    if (evaluate_against_others(hall_of_fame, index)[2] == 0) &&  # non dominated
        ((!(individual.fitness in fitnesses)) || (!(individual.genes in genes)))  # unique either in fitness or genes
        push!(selected_individuals, individual)
        push!(genes, individual.genes)
@@ -458,7 +467,7 @@ function add_to_hall_of_fame!{A, B}(population::Population{A, B},
   end
 
   # select without replacement if hall of fame too big
-  if length(hall_of_fame.individuals) > max_hall_of_fame_size
+  if length(selected_individuals) > max_hall_of_fame_size
     selected_individuals = select_without_replacement(selected_individuals, max_hall_of_fame_size)
   end
 
@@ -473,97 +482,31 @@ end
 
 
 #------------------------------------------------------------------------------
-#BEGIN genetic operators
-
-function uniform_mutation_population{A, B}(population::Population{A, B},
-                                           mutate::Function,
-                                           mutation_probability::FloatingPoint)
-  new_population::Population{A, B} = Population{A, B}()
-  population_size::Int = length(population.individuals)
-  for (index, individual) in enumerate(population.individuals)
-    if rand() < mutation_probability
-      self_genes = deepcopy(individual.genes)
-      self_genes = mutate(self_genes)
-      push!(new_population, Individual(self_genes, B[]))
-    else
-      push!(new_population, Individual{A, B}(deepcopy(individual.genes, B[])))
-    end
-  end
-  new_population
-end
-
-
-function uniform_crossover_population{A, B}(population::Population{A, B},
-                                            crossover_probability::FloatingPoint)
-  new_population::Population{A, B} = Population{A, B}()
-  population_size::Int = length(population.individuals)
-  for(index, individual) in enumerate(population.individuals)
-    if rand() < crossover_probability
-      self_genes = deepcopy(individual.genes)
-      other_genes = deepcopy(population.individuals[rand(1:population_size)])
-      for gene_index = rand(1:length(self_genes)):length(self_genes)
-        self_genes[gene_index] = other_genes[gene_index]
-      end
-      push!(new_population, Individual(self_genes, B[]))
-
-    else
-      push!(new_population, Individual{A, B}(deepcopy(individual.genes), B[]))
-    end
-  end
-  new_population
-end
-
-
-function one_point_crossover_population{A, B}(population::Population{A, B},
-                                        crossover_population::FloatingPoint)
-  new_population::Population{A, B} = Population{A, B}()
-  population_size::Int = length(population.individuals)
-  for(index, individual) in enumerate(population.individuals)
-    if rand() < crossover_probability  # crossover
-      self_genes = deepcopy(individual.genes)
-      other_genes = deepcopy(population.individuals[rand(1:population_size)])
-      for gene_index = rand(1:length(self_genes)):length(self_genes)
-        self_genes[gene_index] = other_genes[gene_index]
-      end
-      push!(new_population, Individual{A, B}(self_genes, B[]))
-
-    else
-      push!(new_population, Individual(deepcopy(individual.genes), [0]))
-    end
-  end
-  new_population
-end
-
-#END
-#------------------------------------------------------------------------------
-
-
-
-
-#------------------------------------------------------------------------------
 #BEGIN main loop
 
-function nsga2{A<:Type, B<:Type}(gene_type::A,
-                                 fitness_type::B,
-                                 initialize_genes::Function,
-                                 evaluate_genes::Function,
-                                 population_size::Int,
-                                 crossover_population::Function,
-                                 mutate_population::Function,
-                                 number_of_generations::Int,
-                                 max_hall_of_fame_size::Int)
+function nsga2{A, B}(::Type{A},
+                     ::Type{B},
+                     initialize_genes::Function,
+                     evaluate_genes::Function,
+                     population_size::Int,
+                     crossover_population::Function,
+                     mutate_population::Function,
+                     number_of_generations::Int,
+                     max_hall_of_fame_size::Int)
   @assert population_size > 0
   @assert number_of_generations >= 0
   @assert max_hall_of_fame_size >= 0
 
   # hall of fame will keep best individuals of all the generations
-  hall_of_fame::HallOfFame = HallOfFame()
+  hall_of_fame::HallOfFame{A, B} = HallOfFame{A, B}()
 
   # initialize two populations
   initial_population::Population{A, B}  = Population{A, B}()
   previous_population::Population{A, B}  = Population{A, B}()
   initialize_population!(initial_population, initialize_genes, evaluate_genes, population_size)
   initialize_population!(previous_population, initialize_genes, evaluate_genes, population_size )
+
+  println("0")  # DEBUG
 
   # merge the two populations
   merged_population::Population{A, B} = Population{A, B}(vcat(initial_population.individuals, previous_population.individuals))
@@ -573,14 +516,15 @@ function nsga2{A<:Type, B<:Type}(gene_type::A,
 
     # sort the merged population into non dominated fronts
     domination_fronts::Vector{Vector{Int}} = non_dominated_sort(merged_population)
+    println("1")  # DEBUG
 
     # add the best individuals to the hall of fame
-    add_to_hall_of_fame!{A, B}(merged_population, domination_fronts[1], hall_of_fame)
-
+    add_to_hall_of_fame!(merged_population, domination_fronts[1], hall_of_fame, max_hall_of_fame_size)
+    println("2")
 
     if length(domination_fronts) == 1 || length(domination_fronts[1]) >= population_size
       # edge case: only one front to select individuals from
-        merge!(population.crowding_distances, calculate_crowding_distance(merged_population, domination_fronts[1], 1))
+        merge!(merged_population.crowding_distances, calculate_crowding_distance(merged_population, domination_fronts[1], 1))
         selected_indices = last_front_selection(merged_population, domination_fronts[1], population_size)
     else
         # separate last front from rest, it is treated differently with
@@ -589,7 +533,7 @@ function nsga2{A<:Type, B<:Type}(gene_type::A,
 
         for (index, front) in enumerate(domination_fronts)
           # update the crowding distances
-          merge!(population.crowding_distances, calculate_crowding_distance(merged_population, front, index))
+          merge!(merged_population.crowding_distances, calculate_crowding_distance(merged_population, front, index))
         end
 
         # calculate how many individuals are left to select (there's n-k in the previous fronts)
@@ -605,16 +549,18 @@ function nsga2{A<:Type, B<:Type}(gene_type::A,
         # fronts that were selected as parents
         selected_indices = vcat(reduce(vcat, domination_fronts), selected_indices)
     end
+    println("3")  # DEBUG
+    parent_population = Population{A, B}(merged_population.individuals[selected_indices], merged_population.crowding_distances)
 
-    parent_population = Population(merged_population.individuals[selected_indices],
-                                  merged_population.crowding_distances)
+    println("4")  # DEBUG
+    # we make a tournament selection to select children
+    selected_individuals::Population{A, B} = unique_fitness_tournament_selection(parent_population)
+    println("4.5")  # DEBUG
+    next_population::Population{A, B} = generate_children(selected_individuals, mutate_population, crossover_population)
 
-
-    #we make a tournament selection to select children
-    # apply genetic operators (recomination and mutation) to obtain next pop
-    next_population = generate_children(unique_fitness_tournament_selection{A, B}(parent_population), mutate_population, crossover_population, evaluation_population)
-
-    merged_population = Population(vcat(next_population.individuals, previous_population.individuals))
+    println("5")  # DEBUG
+    # change names for the next population
+    merged_population = Population{A, B}(vcat(next_population.individuals, previous_population.individuals))
     previous_population = next_population
 
   end

@@ -112,9 +112,9 @@ end
 
 function test_non_dominated_sort(population_size::Int, fitness_length::Int)
   # verify property of non dominated sorting results
-  population = Population{Vector{Int}, Int}()
+  population = Population{Vector{Int}, Vector{Int}}()
   for _ = 1:population_size
-    push!(population.individuals, Individual{Vector{Int}, Int}([0], rand(1:10000, fitness_length)))
+    push!(population.individuals, Individual{Vector{Int}, Vector{Int}}([0], rand(1:10000, fitness_length)))
   end
 
   sorts = non_dominated_sort(population)
@@ -151,9 +151,9 @@ end
 function test_evaluate_against_others(population_size::Int,
                                       fitness_length::Int)
   # generate the population
-  population = Population{Vector{Int}, Int}()
+  population = Population{Vector{Int}, Vector{Int}}()
   for _ =  1: population_size
-    push!(population.individuals, Individual{Vector{Int}, Int}([42],rand(1:10000, fitness_length)))
+    push!(population.individuals, Individual{Vector{Int}, Vector{Int}}([42],rand(1:10000, fitness_length)))
   end
 
   # evaluate all individuals
@@ -179,14 +179,14 @@ end
 
 function test_calculate_crowding_distance()
   #create populationulation
-  population = Population{Vector{Int}, Int}()
-  push!(population.individuals, Individual{Vector{Int}, Int}([0], [0,5]))
-  push!(population.individuals, Individual{Vector{Int}, Int}([0], [0,5]))
-  push!(population.individuals, Individual{Vector{Int}, Int}([0], [2,2]))
-  push!(population.individuals, Individual{Vector{Int}, Int}([0], [3,1]))
-  push!(population.individuals, Individual{Vector{Int}, Int}([0], [3,1]))
-  push!(population.individuals, Individual{Vector{Int}, Int}([0], [3,1]))
-  push!(population.individuals, Individual{Vector{Int}, Int}([0], [5,0]))
+  population = Population{Vector{Int}, Vector{Int}}()
+  push!(population.individuals, Individual{Vector{Int}, Vector{Int}}([0], [0,5]))
+  push!(population.individuals, Individual{Vector{Int}, Vector{Int}}([0], [0,5]))
+  push!(population.individuals, Individual{Vector{Int}, Vector{Int}}([0], [2,2]))
+  push!(population.individuals, Individual{Vector{Int}, Vector{Int}}([0], [3,1]))
+  push!(population.individuals, Individual{Vector{Int}, Vector{Int}}([0], [3,1]))
+  push!(population.individuals, Individual{Vector{Int}, Vector{Int}}([0], [3,1]))
+  push!(population.individuals, Individual{Vector{Int}, Vector{Int}}([0], [5,0]))
 
   # sort into domination fronts
   domination_fronts = non_dominated_sort(population)
