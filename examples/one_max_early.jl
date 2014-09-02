@@ -48,6 +48,7 @@ end
 #BEGIN population mutation function
 function mutate_population{B}(population::Population{Vector{Int}, B},
                                   mutation_probability::FloatingPoint = 0.1,
+                                  gene_mutation_probability::FloatingPoint = 0.05,
                                   evaluate_genes = evaluate_genes)
   @assert 0 <= mutation_probability <= 1
   # crossover operator to be applied over the whole population
@@ -56,8 +57,10 @@ function mutate_population{B}(population::Population{Vector{Int}, B},
     if rand() < mutation_probability  # mutate individual
       genes::Vector{Int} = Int[]
       for gene in individual.genes
-        if rand() < 0.5
+        if rand() < gene_mutation_probability
           push!(genes, mod(gene+1, 2))
+        else
+          push!(genes, gene)
         end
       end
       push!(new_population.individuals, Individual{Vector{Int}, B}(genes, evaluate_genes))
@@ -77,11 +80,18 @@ function crossover_population{A, B}(population::Population{A, B},
   @assert 0 <= crossover_probability <= 1
   # crossover operator to be applied over the whole population
   new_population::Population{A, B} = Population{A, B}()
+
   for individual::Individual{A, B} in population.individuals
     if rand() < crossover_probability
       other = population.individuals[rand(1:length(population.individuals))]
-      crossover_point = rand(1:length(individual.genes))
-      push!(new_population.individuals, Individual{A, B}(vcat(individual.genes[1:crossover_point], other.genes[crossover_point:end]), evaluate_genes))
+      crossover_point = rand(0:length(individual.genes))
+      if crossover_point == 0
+        push!(new_population.individuals, Individual{A, B}(other.genes, evaluate_genes))
+      elseif crossover_point == (length(individual.genes))
+        push!(new_population.individuals, Individual{A, B}(individual.genes, evaluate_genes))
+      else
+        push!(new_population.individuals, Individual{A, B}(vcat(individual.genes[1:crossover_point], other.genes[(crossover_point+1):end]), evaluate_genes))
+      end
     else
       push!(new_population.individuals, individual)
     end
@@ -92,8 +102,8 @@ end
 
 
 #BEGIN main
-const population_size = 200
-const number_of_generations = 200
+const population_size = 150
+const number_of_generations = 150
 
 
 (hall_of_fame, last_population) = nsga2(
@@ -108,17 +118,4 @@ const number_of_generations = 200
                                   population_size  # max size of hall of fame
                                   )
 
-
-
 #END
-
-
-
-
-
-
-
-
-
-
-

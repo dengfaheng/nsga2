@@ -11,6 +11,8 @@
 # Pages 623-630
 
 
+include("progress_meter.jl")
+
 
 #------------------------------------------------------------------------------
 #BEGIN types
@@ -471,7 +473,6 @@ function add_to_hall_of_fame!{A, B}(population::Population{A, B},
   end
 
   hall_of_fame.individuals = selected_individuals
-  println("size of hall of fame ", length(hall_of_fame.individuals))
 end
 
 
@@ -509,6 +510,9 @@ function nsga2{A, B}(::Type{A},
 
   # merge the two populations
   merged_population::Population{A, B} = Population{A, B}(vcat(initial_population.individuals, previous_population.individuals))
+
+  # initialize the progress meter
+  p = Progress(number_of_generations, 1, "progress  ", 70)
 
   # main loop: |selection -> generation| -> |selection -> generation| -> ...
   for iteration::Int = 1:number_of_generations
@@ -561,6 +565,8 @@ function nsga2{A, B}(::Type{A},
     merged_population = Population{A, B}(vcat(next_population.individuals, previous_population.individuals))
     previous_population = next_population
 
+    # update the progress meter
+    next!(p)
   end
 
   (hall_of_fame, previous_population)
