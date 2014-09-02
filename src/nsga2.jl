@@ -419,10 +419,9 @@ function unique_fitness_tournament_selection{A, B}(population::Population{A, B})
       chosen_index = fitness_to_index[fitness][rand(1:length(fitness_to_index[fitness]))]
       push!(selected_individuals, population.individuals[chosen_index])
     end
-
   end
-  ret = Population{A, B}(selected_individuals)
 
+  selected_individuals
 end
 
 
@@ -472,6 +471,7 @@ function add_to_hall_of_fame!{A, B}(population::Population{A, B},
   end
 
   hall_of_fame.individuals = selected_individuals
+  println("size of hall of fame ", length(hall_of_fame.individuals))
 end
 
 
@@ -506,7 +506,6 @@ function nsga2{A, B}(::Type{A},
   initialize_population!(initial_population, initialize_genes, evaluate_genes, population_size)
   initialize_population!(previous_population, initialize_genes, evaluate_genes, population_size )
 
-  println("0")  # DEBUG
 
   # merge the two populations
   merged_population::Population{A, B} = Population{A, B}(vcat(initial_population.individuals, previous_population.individuals))
@@ -516,11 +515,11 @@ function nsga2{A, B}(::Type{A},
 
     # sort the merged population into non dominated fronts
     domination_fronts::Vector{Vector{Int}} = non_dominated_sort(merged_population)
-    println("1")  # DEBUG
+
 
     # add the best individuals to the hall of fame
     add_to_hall_of_fame!(merged_population, domination_fronts[1], hall_of_fame, max_hall_of_fame_size)
-    println("2")
+
 
     if length(domination_fronts) == 1 || length(domination_fronts[1]) >= population_size
       # edge case: only one front to select individuals from
@@ -549,16 +548,15 @@ function nsga2{A, B}(::Type{A},
         # fronts that were selected as parents
         selected_indices = vcat(reduce(vcat, domination_fronts), selected_indices)
     end
-    println("3")  # DEBUG
+
     parent_population = Population{A, B}(merged_population.individuals[selected_indices], merged_population.crowding_distances)
 
-    println("4")  # DEBUG
+
     # we make a tournament selection to select children
-    selected_individuals::Population{A, B} = unique_fitness_tournament_selection(parent_population)
-    println("4.5")  # DEBUG
+    selected_individuals::Population{A, B} = Population{A, B}(unique_fitness_tournament_selection(parent_population))
+
     next_population::Population{A, B} = generate_children(selected_individuals, mutate_population, crossover_population)
 
-    println("5")  # DEBUG
     # change names for the next population
     merged_population = Population{A, B}(vcat(next_population.individuals, previous_population.individuals))
     previous_population = next_population

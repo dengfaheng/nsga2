@@ -92,8 +92,8 @@ end
 
 
 #BEGIN main
-const population_size = 10
-const number_of_generations = 500
+const population_size = 200
+const number_of_generations = 200
 
 
 (hall_of_fame, last_population) = nsga2(
