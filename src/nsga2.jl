@@ -440,14 +440,15 @@ end
 
 function generate_children{A, B}(population::Population{A, B},
                                  mutate_population::Function,
-                                 crossover_population::Function)
+                                 crossover_population::Function,
+                                 evaluate_genes::Function)
   # final step of the generation, apply mutation and crossover to yield new children
   # both crossover and mutation functions must apply over entire populations
   # apply crossover, mutation
   # and then evaluation new individuals (can fill their fitness values with bogus until evaluation)
 
-  new_population::Population{A, B} = crossover_population(population)
-  new_population = mutate_population(new_population)
+  new_population::Population{A, B} = crossover_population(population, evaluate_genes)
+  new_population = mutate_population(new_population, evaluate_genes)
 
   new_population
 end
@@ -568,7 +569,7 @@ function nsga2{A, B}(::Type{A},
     #  make a tournament selection to select children
     selected_individuals::Population{A, B} = Population{A, B}(unique_fitness_tournament_selection(parent_population))
 
-    next_population::Population{A, B} = generate_children(selected_individuals, mutate_population, crossover_population)
+    next_population::Population{A, B} = generate_children(selected_individuals, mutate_population, crossover_population, evaluate_genes)
 
     # change names for the next population
     merged_population = Population{A, B}(vcat(next_population.individuals, previous_population.individuals))
