@@ -49,7 +49,7 @@ immutable Individual{A, B}
 end
 
 
-type Population{A, B}
+immutable Population{A, B}
   # includes a mapping of fitness values to crowding distance
   individuals::Vector{Individual{A, B}}
   crowding_distances::Dict{B, (Int, FloatingPoint)}
@@ -462,7 +462,7 @@ function add_to_hall_of_fame!{A, B}(population::Population{A, B},
   # filter out duplicates (same genes)
   # unique fitness or same fitness and unique genes
 
-  hall_of_fame.individuals = vcat(hall_of_fame.individuals, population.individuals[indices])
+  append!(hall_of_fame.individuals, population.individuals[indices])
 
   # select the nondominated individuals
   genes::Set{A} = Set{A}()
@@ -484,7 +484,9 @@ function add_to_hall_of_fame!{A, B}(population::Population{A, B},
     selected_individuals = select_without_replacement(selected_individuals, max_hall_of_fame_size)
   end
 
-  hall_of_fame.individuals = selected_individuals
+  empty!(hall_of_fame.individuals)
+  append!(hall_of_fame.individuals, selected_individuals)
+  nothing
 end
 
 
