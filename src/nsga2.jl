@@ -1,4 +1,7 @@
 
+#BEGIN README==================================================================
+
+
 # Implementation of the NSGA-II multiobjective
 # genetic algorithm as described in:
 
@@ -11,11 +14,23 @@
 # Pages 623-630
 
 
+#END===========================================================================
+
+
+
+
+#BEGIN INCLUDES================================================================
+
+
 include("progress_meter.jl")
 
 
-#------------------------------------------------------------------------------
-#BEGIN types
+#END===========================================================================
+
+
+
+
+#BEGIN TYPES===================================================================
 
 
 immutable Individual{A, B}
@@ -58,14 +73,12 @@ end
 typealias HallOfFame Population
 
 
-#END
-#------------------------------------------------------------------------------
+#END===========================================================================
 
 
 
 
-#------------------------------------------------------------------------------
-#BEGIN misc methods
+#BEGIN MISC METHODS============================================================
 
 
 function select_without_replacement{T}(vector::Vector{T}, k::Int)
@@ -91,8 +104,8 @@ end
 
 
 function fast_delete(array::Vector{Int}, to_delete::Vector{Int})
-  # we take advantage of the knowledge that both vectors are sorted
-  # makes it O(n)
+  # take advantage of the knowledge that both vectors are sorted
+  # O(n)
   @assert issorted(array)
   @assert issorted(to_delete)
   result::Vector{Int} = Int[]
@@ -164,14 +177,12 @@ function evaluate_against_others{A, B}(population::Population{A, B}, self_index:
 end
 
 
-#END
-#------------------------------------------------------------------------------
+#END===========================================================================
 
 
 
 
-#------------------------------------------------------------------------------
-#BEGIN population methods
+#BEGIN POPULATION METHODS======================================================
 
 
 function initialize_population!{A, B}(population::Population{A, B},
@@ -277,7 +288,7 @@ function calculate_crowding_distance{A, B}(population::Population{A, B},
   # assign crowding crowding_distances to the other
   # fitness vectors for each objectives
   for i = 1:fitness_length
-    # edge case here! if range == 0, 0 / 0 will give NaN, we ignore the objective in such case
+    # edge case here! if range == 0, 0 / 0 will give NaN, ignore the objective in such case
     # in DEAP, this is treated using
     # if crowd[-1][0][i] == crowd[0][0][i]:
     #        continue
@@ -394,12 +405,12 @@ function unique_fitness_tournament_selection{A, B}(population::Population{A, B})
     return population.individuals
   end
 
-  # else we must select parents
+  # else  must select parents
   selected_individuals::Vector{Individual{A, B}} = Individual{A, B}[]
 
   while length(selected_individuals) != population_size
-    # we either pick all the fitnesses and select a random individual from them
-    # or select a subset of them. depends on how many new parents we still need to add
+    #  either pick all the fitnesses and select a random individual from them
+    # or select a subset of them. depends on how many new parents  still need to add
     k = min((2*(population_size - length(selected_individuals))), length(fitness_to_index))
 
     # sample k fitnesses and get their (front, crowing) from population.crowding_distances
@@ -416,7 +427,7 @@ function unique_fitness_tournament_selection{A, B}(population::Population{A, B})
       i += 2
     end
 
-    # we now randomly choose an individual from the indices associated with the chosen fitnesses
+    #  now randomly choose an individual from the indices associated with the chosen fitnesses
     for fitness in chosen_fitnesses
       chosen_index = fitness_to_index[fitness][rand(1:length(fitness_to_index[fitness]))]
       push!(selected_individuals, population.individuals[chosen_index])
@@ -476,14 +487,12 @@ function add_to_hall_of_fame!{A, B}(population::Population{A, B},
 end
 
 
-#END
-#------------------------------------------------------------------------------
+#END===========================================================================
 
 
 
 
-#------------------------------------------------------------------------------
-#BEGIN main loop
+#BEGIN MAIN====================================================================
 
 function nsga2{A, B}(::Type{A},
                      ::Type{B},
@@ -542,7 +551,7 @@ function nsga2{A, B}(::Type{A},
         # calculate how many individuals are left to select (there's n-k in the previous fronts)
         to_select::Int = population_size - length(reduce(vcat, domination_fronts))
 
-        # find the indices of the k individuals we need from the last front
+        # find the indices of the k individuals  need from the last front
         selected_indices::Vector{Int} = last_front_selection(merged_population, last_front, to_select)
 
         # update the crowding distance on the last front
@@ -556,7 +565,7 @@ function nsga2{A, B}(::Type{A},
     parent_population = Population{A, B}(merged_population.individuals[selected_indices], merged_population.crowding_distances)
 
 
-    # we make a tournament selection to select children
+    #  make a tournament selection to select children
     selected_individuals::Population{A, B} = Population{A, B}(unique_fitness_tournament_selection(parent_population))
 
     next_population::Population{A, B} = generate_children(selected_individuals, mutate_population, crossover_population)
@@ -572,5 +581,4 @@ function nsga2{A, B}(::Type{A},
   (hall_of_fame, previous_population)
 end
 
-#END
-#------------------------------------------------------------------------------
+#END===========================================================================
