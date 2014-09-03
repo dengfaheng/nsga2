@@ -211,7 +211,8 @@ function test_non_dominated_sort(population_size::Int=500, fitness_length::Int=5
           Individual{Vector{Int}, Vector{Int}}([0], rand(1:10000, fitness_length)))
   end
 
-  sorts = non_dominated_sort(population)
+  sorts::Vector{Vector{Int}} = Vector{Int}[]
+  non_dominated_sort!(population, sorts)
 
   # property 1: individuals of the same front do not dominate each others
   for i = 1:length(sorts)

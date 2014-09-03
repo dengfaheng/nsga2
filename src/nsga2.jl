@@ -200,9 +200,13 @@ function initialize_population!{A, B}(population::Population{A, B},
 end
 
 
-function non_dominated_sort{A, B}(population::Population{A, B})
+function non_dominated_sort!{A, B}(population::Population{A, B},
+                                   domination_fronts::Vector{Vector{Int}})
   # sort population into nondominating fronts (best to worst) until
   # at least half the original number of individuals is put in a front
+
+  # remove the previous information
+  empty!(domination_fronts)
 
   population_size::Int = length(population.individuals)
   cutoff::Int = ceil(population_size / 2)
@@ -214,7 +218,6 @@ function non_dominated_sort{A, B}(population::Population{A, B})
     push!(domination_information, evaluate_against_others(population, index))
   end
 
-  fronts_to_indices::Vector{Vector{Int}} = Vector{Int}[]
 
   # find nondominated individuals and separate them from the rest
   # until there are at least half of the double population in them
@@ -234,7 +237,7 @@ function non_dominated_sort{A, B}(population::Population{A, B})
     end
 
     # push the current front to the result
-    push!(fronts_to_indices, current_front_indices)
+    push!(domination_fronts, current_front_indices)
     domination_information = (Int, Int, Vector{Int})[]
 
     # remove the indices of the current front from the dominated individuals
@@ -244,7 +247,7 @@ function non_dominated_sort{A, B}(population::Population{A, B})
     end
   end
 
-  fronts_to_indices
+  nothing
 end
 
 
@@ -513,15 +516,19 @@ function nsga2{A, B}(::Type{A},
   # hall of fame will keep best individuals of all the generations
   hall_of_fame::HallOfFame{A, B} = HallOfFame{A, B}()
 
-  # initialize two populations
-  initial_population::Population{A, B}  = Population{A, B}()
-  previous_population::Population{A, B}  = Population{A, B}()
+  # initialize all the populations
+  initial_population::Population{A, B} = Population{A, B}()
+  previous_population::Population{A, B} = Population{A, B}()
   initialize_population!(initial_population, initialize_genes, evaluate_genes, population_size)
-  initialize_population!(previous_population, initialize_genes, evaluate_genes, population_size )
+  initialize_population!(previous_population, initialize_genes, evaluate_genes, population_size)
 
+  # 
+  domination_fronts::Vector{Vector{Int}} = Vector{Int}[]
 
-  # merge the two populations
+  # 
+  parent_population::Population{A, B} = Population{A, B}()
   merged_population::Population{A, B} = Population{A, B}(vcat(initial_population.individuals, previous_population.individuals))
+
 
   # initialize the progress meter
   p = Progress(number_of_generations, 1, "progress  ", 70)
@@ -530,8 +537,7 @@ function nsga2{A, B}(::Type{A},
   for iteration::Int = 1:number_of_generations
 
     # sort the merged population into non dominated fronts
-    domination_fronts::Vector{Vector{Int}} = non_dominated_sort(merged_population)
-
+    non_dominated_sort!(merged_population, domination_fronts)
 
     # add the best individuals to the hall of fame
     add_to_hall_of_fame!(merged_population, domination_fronts[1], hall_of_fame, max_hall_of_fame_size)
@@ -565,7 +571,10 @@ function nsga2{A, B}(::Type{A},
         selected_indices = vcat(reduce(vcat, domination_fronts), selected_indices)
     end
 
-    parent_population = Population{A, B}(merged_population.individuals[selected_indices], merged_population.crowding_distances)
+    empty!(parent_population.individuals)
+    empty!(parent_population.crowding_distances)
+    append!(parent_population.individuals, merged_population.individuals[selected_indices])
+    merge!(parent_population.crowding_distances, merged_population.crowding_distances)
 
 
     #  make a tournament selection to select children

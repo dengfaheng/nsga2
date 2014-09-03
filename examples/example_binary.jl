@@ -209,8 +209,8 @@ example_2() = nsga2(
                     )
 
 # run the examples
-(hall_of_fame_1, _) = example_1()
-(hall_of_fame_2, _) = example_2()
+# (hall_of_fame_1, _) = example_1()
+# (hall_of_fame_2, _) = example_2()
 
 
 #END===========================================================================
