@@ -3,7 +3,7 @@
 #BEGIN INCLUDES================================================================
 
 
-include("nsga2.jl")
+include("../src/nsga2.jl")
 using Base.Test
 
 
@@ -17,7 +17,7 @@ using Base.Test
 
 macro run_tests(test_vector)
   quote
-    print_with_color(:green, "==================================SUMMARY======================================\n\n")
+    print_with_color(:green, "\n==================================SUMMARY======================================\n\n")
     local num_tests::Int = 0
     local passed_tests::Int = 0
 
@@ -40,7 +40,7 @@ macro run_tests(test_vector)
     else
       print_with_color(:green, "\nALL TESTS PASSED\n")
     end
-    print_with_color(:green, "===============================================================================")
+    print_with_color(:green, "===============================================================================\n\n")
   end
 end
 
@@ -260,7 +260,8 @@ function test_calculate_crowding_distance()
   push!(population.individuals, Individual{Vector{Int}, Vector{Int}}([0], [5,0]))
 
   # sort into domination fronts
-  domination_fronts = non_dominated_sort(population)
+  domination_fronts::Vector{Vector{Int}} = Vector{Int}[]
+  non_dominated_sort!(population, domination_fronts)
 
   # calculate crowding distances
   merge!(population.crowding_distances, 
@@ -309,3 +310,5 @@ function run_tests()
 
 end
 
+
+run_tests()
