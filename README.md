@@ -1,6 +1,6 @@
 # NSGA-II in julia
 
-![](https://raw.githubusercontent.com/fracta/nsga2/master/doc/images/nsga2.jpg)
+![](doc/images/nsga2.jpg)
 
 Julia implementation of the Non-dominated Sorting Genetic Algorithm-II (NSGA-II).
 
