@@ -1,5 +1,7 @@
 # NSGA-II in julia
 
+![](https://raw.githubusercontent.com/fracta/nsga2/master/doc/images/nsga2.jpg)
+
 Julia implementation of the Non-dominated Sorting Genetic Algorithm-II (NSGA-II).
 
 This is actually the improved version as devised by *Fortin et al* in which there is sampling
