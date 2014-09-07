@@ -508,11 +508,13 @@ function nsga2{A, B}(::Type{A},
                      crossover_population::Function,
                      mutate_population::Function,
                      number_of_generations::Int,
-                     max_hall_of_fame_size::Int)
+                     max_hall_of_fame_size::Int,
+                     rng_seed::Int=42)
   @assert population_size > 0
   @assert number_of_generations >= 0
   @assert max_hall_of_fame_size >= 0
 
+  srand(rng_seed)
   # hall of fame will keep best individuals of all the generations
   hall_of_fame::HallOfFame{A, B} = HallOfFame{A, B}()
 
