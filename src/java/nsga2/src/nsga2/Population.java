@@ -2,7 +2,7 @@ package nsga2;
 
 
 import nsga2.util.Util;
-import random.RngStream;
+import nsga2.random.RngStream;
 
 import java.util.ArrayList;
 import java.util.Collections;

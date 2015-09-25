@@ -1,7 +1,7 @@
 package nsga2.util;
 
 
-import random.RngStream;
+import nsga2.random.RngStream;
 
 import java.util.ArrayList;
 import java.util.Comparator;
