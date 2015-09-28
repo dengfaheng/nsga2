@@ -7,7 +7,7 @@ import java.util.ArrayList;
 public class Individual implements Comparable<Individual> {
 
     private final ArrayList<Integer> genes;
-    private final ArrayList<Double> scores;
+    private ArrayList<Double> scores;
 
     /**
      * Constructor
@@ -66,7 +66,7 @@ public class Individual implements Comparable<Individual> {
 
 
     /*
-         * used to tell whether first vector is dominated/dominating/non-dominating the second vector
+     * used to tell whether first vector is dominated/dominating/non-dominating the second vector
      * used to compare solutions by their scores, not identity
      * ([0, 0, 2]  > [0, 0, 1]) =  1
      * ([0, 0, 1] == [0, 1, 0]) =  0
