@@ -1,4 +1,4 @@
-package nsga2.random;
+package nsga2.util;
 /**
  * Title:          mccons.RngStream.java
  * Description:    Multiple Streams and Substreams of Random Numbers

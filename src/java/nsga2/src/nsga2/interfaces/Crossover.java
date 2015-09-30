@@ -1,4 +1,4 @@
-package nsga2.genops;
+package nsga2.interfaces;
 
 
 import nsga2.Individual;

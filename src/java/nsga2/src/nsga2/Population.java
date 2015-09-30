@@ -1,11 +1,12 @@
 package nsga2;
 
 
+import nsga2.interfaces.Evaluate;
 import nsga2.util.CrowdedCompare;
 import nsga2.util.Pair;
 import nsga2.util.ReversedPairSecondComparator;
 import nsga2.util.Util;
-import nsga2.random.RngStream;
+import nsga2.util.RngStream;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -27,22 +28,63 @@ public class Population {
     protected Hashtable<ArrayList<Double>, Double> fitnessToCrowding;
     protected ArrayList<ArrayList<Integer>> fronts;
 
+    // evaluation option
+    protected Evaluate evaluationFunction;
 
-    Population(List<Individual> individualList_) {
+
+    Population(List<Individual> individualList_, Evaluate evaluationFunction_) {
         // copy individuals
         individualList = new ArrayList<>(individualList_);
-        instantiateStructures();
+        evaluationFunction = evaluationFunction_;
+        evaluatePopulation();
+        calculateFronts();
     }
+
 
     Population(Population other) {
-        this(other.individualList);
+        this(other.individualList, other.getEvaluationFunction());
     }
 
+
+    Population(Evaluate evaluationFunction){
+        this(new ArrayList<Individual>(), evaluationFunction);
+    }
+
+
+    public Evaluate getEvaluationFunction()
+    {
+        return evaluationFunction;
+    }
+
+
+    public void evaluatePopulation()
+    {
+        for(Individual individual : individualList)
+        {
+            individual.setScores(evaluationFunction.evaluate(individual));
+        }
+    }
+
+    public Hashtable<ArrayList<Double>, ArrayList<Integer>> getFitnessToIndices() {
+        return fitnessToIndices;
+    }
+
+    public Hashtable<ArrayList<Double>, Integer> getFitnessToFront() {
+        return fitnessToFront;
+    }
+
+    public Hashtable<ArrayList<Double>, Double> getFitnessToCrowding() {
+        return fitnessToCrowding;
+    }
+
+    public ArrayList<ArrayList<Integer>> getFronts() {
+        return fronts;
+    }
 
     /**
      * clean up the helper structures and recalculate them
      */
-    public void instantiateStructures()
+    public void calculateFronts()
     {
         // initialize other structures empty
 
@@ -250,9 +292,8 @@ public class Population {
      */
     public static ArrayList<Integer> lastFrontSelection(Population population,
                                                         ArrayList<Integer> lastFrontIndices,
-                                                        Hashtable<ArrayList<Double>, Double> fitnessToCrowding,
-                                                        RngStream stream,
-                                                        int numToSelect) {
+                                                        int numToSelect,
+                                                        RngStream stream) {
         assert (0 < numToSelect) && (numToSelect < lastFrontIndices.size());
 
         // map fitness -> indices (one to many) and map fitness -> crowding distance
@@ -272,8 +313,8 @@ public class Population {
         }
 
         ArrayList<Pair<ArrayList<Double>, Double>> fitnessCrowdingPairs = new ArrayList<>();
-        for (ArrayList<Double> key : fitnessToCrowding.keySet()) {
-            fitnessCrowdingPairs.add(new Pair<>(key, fitnessToCrowding.get(key)));
+        for (ArrayList<Double> key : population.getFitnessToCrowding().keySet()) {
+            fitnessCrowdingPairs.add(new Pair<>(key, population.getFitnessToCrowding().get(key)));
         }
 
         // sort fitness by decreasing crowding distance
@@ -318,17 +359,13 @@ public class Population {
      * select across entire range of fitness to avoid bias by re-occurring fitness
      * @return new population
      */
-    public static Population uniqueFitnessTournamentSelection(Population population,
-                                                              Hashtable<ArrayList<Double>, ArrayList<Integer>> fitnessToIndices,
-                                                              Hashtable<ArrayList<Double>, Double> fitnessToCrowding,
-                                                              Hashtable<ArrayList<Double>, Integer> fitnessToFront,
-                                                              RngStream stream)
+    public static ArrayList<Individual> uniqueFitnessTournamentSelection(Population population, RngStream stream)
     {
         //  edge case: only one fitness, return the population as it was
-        ArrayList<ArrayList<Double>> uniqueFitness = new ArrayList<>(fitnessToIndices.keySet());
+        ArrayList<ArrayList<Double>> uniqueFitness = new ArrayList<>(population.getFitnessToCrowding().keySet());
         if (uniqueFitness.size() == 1)
         {
-            return new Population(population);
+            return population.getIndividualList();
         }
         // else must select parents
         int popSize = population.size();
@@ -351,8 +388,8 @@ public class Population {
             frontAndCrowding = new ArrayList<>();
             for (ArrayList<Double> fitness : candidateFitness)
             {
-                crowding = fitnessToCrowding.get(fitness);
-                front = fitnessToFront.get(fitness);
+                crowding = population.getFitnessToCrowding().get(fitness);
+                front = population.getFitnessToFront().get(fitness);
                 frontAndCrowding.add(new Pair<>(front, crowding));
             }
 
@@ -371,7 +408,7 @@ public class Population {
             ArrayList<Integer> indicesWithSameFitness;
             for (ArrayList<Double> fitness : chosenFitness)
             {
-                indicesWithSameFitness = fitnessToIndices.get(fitness);
+                indicesWithSameFitness = population.getFitnessToIndices().get(fitness);
                 if (indicesWithSameFitness.size() > 1)
                 {
                     int index = Util.chooseRandom(indicesWithSameFitness, stream);
@@ -380,7 +417,7 @@ public class Population {
             }
 
         }
-        return new Population(selectedIndividuals);
+        return selectedIndividuals;
     }
 
 

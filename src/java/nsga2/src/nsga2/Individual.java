@@ -1,5 +1,7 @@
 package nsga2;
 
+import com.sun.istack.internal.NotNull;
+
 import java.util.ArrayList;
 
 
@@ -41,6 +43,10 @@ public class Individual implements Comparable<Individual> {
         return scores;
     }
 
+    public void setScores(ArrayList<Double> newScores)
+    {
+        scores = newScores;
+    }
 
     public String toString() {
         StringBuilder builder = new StringBuilder();
@@ -72,7 +78,8 @@ public class Individual implements Comparable<Individual> {
      * ([0, 0, 1] == [0, 1, 0]) =  0
      * ([1, 0, 1]  < [1, 1, 1]) = -1
      */
-    public int compareTo(Individual other) {
+    @Override
+    public int compareTo(@NotNull Individual other) {
         assert (scores.size() == other.getScores().size());
 
         boolean firstDominates = false, secondDominates = false;

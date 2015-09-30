@@ -1,6 +1,7 @@
 package nsga2;
 
-import nsga2.random.RngStream;
+import nsga2.interfaces.Evaluate;
+import nsga2.util.RngStream;
 import nsga2.util.Util;
 
 import java.util.ArrayList;
@@ -9,9 +10,9 @@ import java.util.Hashtable;
 public class HallOfFame extends Population{
     private final int maxSize;
 
-    HallOfFame(int maxSize_)
+    HallOfFame(int maxSize_, Evaluate evaluationFunction)
     {
-        super(new ArrayList<Individual>());
+        super(new ArrayList<Individual>(), evaluationFunction);
         maxSize = maxSize_;
         return;
     }
@@ -23,12 +24,9 @@ public class HallOfFame extends Population{
         fitnessToFront = null;
         individualList.addAll(firstFront);
 
-        // map fitness -> indices
-
         // map fitness -> fronts
         fronts = getNondominatingFronts(this);
         individualList = Util.getIndices(individualList, fronts.get(0));
-
 
         if (individualList.size() > maxSize)
         {

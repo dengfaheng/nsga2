@@ -1,8 +1,6 @@
 package nsga2.util;
 
 
-import nsga2.random.RngStream;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -130,4 +128,22 @@ public final class Util {
         }
         return subList;
     }
+
+
+    public static Integer nestedListSize(ArrayList<ArrayList<Integer>> nestedLists)
+    {
+        Integer total = 0;
+        for (ArrayList<Integer> nested : nestedLists)
+        {
+            total += nested.size();
+        }
+        return total;
+    }
+
+    public static <T> T arrayListLast(ArrayList<T> list)
+    {
+        return list.get(list.size() - 1);
+    }
+
+
 }

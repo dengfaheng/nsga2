@@ -514,22 +514,19 @@ function nsga2{A, B}(::Type{A},
   @assert number_of_generations >= 0
   @assert max_hall_of_fame_size >= 0
 
+  # set the seeds of the pseudo random number generator
   srand(rng_seed)
-  # hall of fame will keep best individuals of all the generations
+
+  # forward declarations
+  # initialize the population
   hall_of_fame::HallOfFame{A, B} = HallOfFame{A, B}()
-
-  # initialize all the populations
   initial_population::Population{A, B} = Population{A, B}()
-  previous_population::Population{A, B} = Population{A, B}()
   initialize_population!(initial_population, initialize_genes, evaluate_genes, population_size)
+  previous_population::Population{A, B} = Population{A, B}()
   initialize_population!(previous_population, initialize_genes, evaluate_genes, population_size)
-
-  # 
-  domination_fronts::Vector{Vector{Int}} = Vector{Int}[]
-
-  # 
   parent_population::Population{A, B} = Population{A, B}()
   merged_population::Population{A, B} = Population{A, B}(vcat(initial_population.individuals, previous_population.individuals))
+  domination_fronts::Vector{Vector{Int}} = Vector{Int}[]
 
 
   # initialize the progress meter
@@ -545,6 +542,7 @@ function nsga2{A, B}(::Type{A},
     add_to_hall_of_fame!(merged_population, domination_fronts[1], hall_of_fame, max_hall_of_fame_size)
 
 
+    # select the parent individuals
     if length(domination_fronts) == 1 || length(domination_fronts[1]) >= population_size
       # edge case: only one front to select individuals from
         merge!(merged_population.crowding_distances, calculate_crowding_distance(merged_population, domination_fronts[1], 1))
