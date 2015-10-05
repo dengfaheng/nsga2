@@ -17,15 +17,15 @@ public class ProgressBar {
         assert (percentage <= 1.);
 
         int progressLength = (int) (barLength * percentage);
-        System.err.print("[");
+        System.out.print("[");
         for (int i = 0; i < barLength; ++i) {
             if (i <= progressLength)
-                System.err.print("#");
+                System.out.print("#");
             else
-                System.err.print(" ");
+                System.out.print(" ");
         }
-        System.err.print("] " + (int)(percentage * 100.) + "% " + processName + "\r");
-        System.err.flush();
+        System.out.print("] " + (int)(percentage * 100.) + "% " + processName + "\r");
+        System.out.flush();
     }
 
 
@@ -34,7 +34,7 @@ public class ProgressBar {
      */
     public void clean() {
         this.update(1.);
-        System.err.println();
-        System.err.flush();
+        System.out.println();
+        System.out.flush();
     }
 }

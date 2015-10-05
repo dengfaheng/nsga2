@@ -1,12 +1,15 @@
 package nsga2;
 
 
+import nsga2.interfaces.Crossover;
 import nsga2.interfaces.Evaluate;
+import nsga2.interfaces.Mutate;
 import nsga2.util.CrowdedCompare;
 import nsga2.util.Pair;
 import nsga2.util.ReversedPairSecondComparator;
 import nsga2.util.Util;
 import nsga2.util.RngStream;
+
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -23,7 +26,6 @@ public class Population {
     protected ArrayList<Individual> individualList;
 
     // some mappings that are reused often (never recalculate)
-    protected Hashtable<ArrayList<Double>, ArrayList<Integer>> fitnessToIndices;
     protected Hashtable<ArrayList<Double>, Integer> fitnessToFront;
     protected Hashtable<ArrayList<Double>, Double> fitnessToCrowding;
     protected ArrayList<ArrayList<Integer>> fronts;
@@ -32,12 +34,10 @@ public class Population {
     protected Evaluate evaluationFunction;
 
 
-    Population(List<Individual> individualList_, Evaluate evaluationFunction_) {
+    public Population(List<Individual> individualList_, Evaluate evaluationFunction_) {
         // copy individuals
         individualList = new ArrayList<>(individualList_);
         evaluationFunction = evaluationFunction_;
-        evaluatePopulation();
-        calculateFronts();
     }
 
 
@@ -46,28 +46,22 @@ public class Population {
     }
 
 
-    Population(Evaluate evaluationFunction){
+    Population(Evaluate evaluationFunction) {
         this(new ArrayList<Individual>(), evaluationFunction);
     }
 
 
-    public Evaluate getEvaluationFunction()
-    {
+    public Evaluate getEvaluationFunction() {
         return evaluationFunction;
     }
 
 
-    public void evaluatePopulation()
-    {
-        for(Individual individual : individualList)
-        {
-            individual.setScores(evaluationFunction.evaluate(individual));
+    public void evaluatePopulation() {
+        for (Individual individual : individualList) {
+            individual.setScores(evaluationFunction.evaluate(individual.getGenes()));
         }
     }
 
-    public Hashtable<ArrayList<Double>, ArrayList<Integer>> getFitnessToIndices() {
-        return fitnessToIndices;
-    }
 
     public Hashtable<ArrayList<Double>, Integer> getFitnessToFront() {
         return fitnessToFront;
@@ -84,20 +78,16 @@ public class Population {
     /**
      * clean up the helper structures and recalculate them
      */
-    public void calculateFronts()
-    {
-        // initialize other structures empty
-
-        // map fitness -> indices
-        fitnessToIndices = getUniqueFitnessToIndices(this);
+    public void calculateFronts() {
+        // step 1: score the whole population
+        evaluatePopulation();
 
         // map fitness -> fronts
-        fronts = getNondominatingFronts(this);
+        fronts = getNonDominatingFronts(this);
+
         fitnessToFront = new Hashtable<>();
-        for (int front = 0; front != fronts.size(); ++front)
-        {
-            for (int index : fronts.get(front))
-            {
+        for (int front = 0; front != fronts.size(); ++front) {
+            for (int index : fronts.get(front)) {
                 ArrayList<Double> fitness = get(index).getScores();
                 fitnessToFront.put(fitness, front);
 
@@ -106,8 +96,7 @@ public class Population {
 
         // map fitness -> crowding
         fitnessToCrowding = new Hashtable<>();
-        for (ArrayList<Integer> frontIndices : fronts)
-        {
+        for (ArrayList<Integer> frontIndices : fronts) {
             fitnessToCrowding.putAll(getFitnessToCrowding(this, frontIndices));
         }
     }
@@ -120,12 +109,12 @@ public class Population {
      * @param index index of the individual to compare against all others
      * @return index of the individuals dominating the solution at index
      */
-    public static ArrayList<Integer> findDominators(Population population, int index) {
+    public static ArrayList<Integer> findDominators(ArrayList<Individual> individuals, int index) {
         ArrayList<Integer> dominatedBy = new ArrayList<>();
-        Individual individual = population.get(index);
+        Individual individual = individuals.get(index);
 
-        for (int i = 0; i != population.size(); ++i) {
-            if (individual.compareTo(population.get(i)) < 0) {
+        for (int i = 0; i != individuals.size(); ++i) {
+            if (individual.compareTo(individuals.get(i)) < 0) {
                 dominatedBy.add(i);
             }
         }
@@ -134,26 +123,10 @@ public class Population {
 
 
     /**
-     * for each individual, map scores => list of index with same score
-     *
-     */
-    public static Hashtable<ArrayList<Double>, ArrayList<Integer>> getUniqueFitnessToIndices(Population population) {
-        Hashtable<ArrayList<Double>, ArrayList<Integer>> mapping = new Hashtable<>();
-        for (int index = 0; index != population.size(); ++index) {
-            ArrayList<Double> fitness = population.get(index).getScores();
-            if (!mapping.contains(fitness)) {
-                mapping.put(fitness, new ArrayList<Integer>());
-            }
-            mapping.get(fitness).add(index);
-        }
-        return mapping;
-    }
-
-
-    /**
      * crowding distance measures the proximity of a solution to its neighbors
      * it is used to preserve diversity, later in the algorithm
-     * @param population whole population
+     *
+     * @param population   whole population
      * @param frontIndices indices of the individuals from the front
      * @return mapping fitness => crowding for every member of the front
      */
@@ -224,63 +197,56 @@ public class Population {
      * @param population population to sort (at least half) into-dominating fronts
      * @return non-dominating fronts containing at least half the size of the population
      */
-    public static ArrayList<ArrayList<Integer>> getNondominatingFronts(Population population) {
+    public static ArrayList<ArrayList<Integer>> getNonDominatingFronts(Population population) {
+
+        ArrayList<ArrayList<Integer>> dominationFronts = new ArrayList<>();
 
         // for each solution, find its dominators
         ArrayList<Pair<Integer, ArrayList<Integer>>> indexToDominating = new ArrayList<>();
         for (int index = 0; index != population.size(); ++index) {
-            indexToDominating.add(new Pair<>(index, findDominators(population, index)));
+            indexToDominating.add(new Pair<>(index, findDominators(population.getIndividualList(), index)));
         }
 
         // some forward declarations
         // num of individuals we need
         int cutoff = (int) Math.ceil(population.size() / 2.0);
-        int numSorted = 0;
+        System.out.println(cutoff);
 
         // indices of the non dominated individuals of the current front
-        ArrayList<Integer> nonDominated;
-        ArrayList<Pair<Integer, ArrayList<Integer>>> dominated;
 
         // find non-dominated individuals and separate them from the rest iteratively
-        ArrayList<ArrayList<Integer>> dominationFrontsIndices = new ArrayList<>();
-        while (numSorted < cutoff) {
-            dominated = new ArrayList<>();
-            nonDominated = new ArrayList<>();
+        while (Util.nestedListSize(dominationFronts) < cutoff) {
+
+            ArrayList<Pair<Integer, ArrayList<Integer>>> dominated = new ArrayList<>();
+            ArrayList<Integer> dominating = new ArrayList<>();
 
             // separate non-dominated from dominated
             for (Pair<Integer, ArrayList<Integer>> information : indexToDominating) {
-                int index = information.getFirst();
-                ArrayList<Integer> dominatedBy = information.getSecond();
-
                 // non-dominated
-                if (dominatedBy.size() == 0) {
-                    nonDominated.add(index);
+                if (information.getSecond().size() == 0) {
+                    dominating.add(information.getFirst());
                 }
                 // dominated
                 else {
-                    dominated.add(new Pair<>(index, dominatedBy));
+                    dominated.add(new Pair<>(information.getFirst(), new ArrayList<>(information.getSecond())));
                 }
             }
 
             // add the current front to the domination fronts
-            dominationFrontsIndices.add(nonDominated);
+            dominationFronts.add(new ArrayList<>(dominating));
 
             // update the domination information
             ArrayList<Pair<Integer, ArrayList<Integer>>> updatedIndexToDominating = new ArrayList<>();
             for (Pair<Integer, ArrayList<Integer>> information : dominated) {
-                ArrayList<Integer> subtracted = Util.fastDelete(information.getSecond(), nonDominated);
+                ArrayList<Integer> subtracted = Util.fastDelete(information.getSecond(), dominating);
                 updatedIndexToDominating.add(new Pair<>(information.getFirst(), subtracted));
             }
             indexToDominating = updatedIndexToDominating;
-
-            // update the count
-            numSorted += nonDominated.size();
         }
 
         // update member variables related to non domination fronts
-        return dominationFrontsIndices;
+        return dominationFronts;
     }
-
 
 
     /**
@@ -357,27 +323,32 @@ public class Population {
 
     /**
      * select across entire range of fitness to avoid bias by re-occurring fitness
+     *
      * @return new population
      */
-    public static ArrayList<Individual> uniqueFitnessTournamentSelection(Population population, RngStream stream)
-    {
+    public static ArrayList<Individual> uniqueFitnessTournamentSelection(Population population, RngStream stream) {
         //  edge case: only one fitness, return the population as it was
-        ArrayList<ArrayList<Double>> uniqueFitness = new ArrayList<>(population.getFitnessToCrowding().keySet());
-        if (uniqueFitness.size() == 1)
-        {
+        ArrayList<ArrayList<Double>> scores = new ArrayList<>();
+        for (Individual individual : population.getIndividualList()) {
+            scores.add(individual.getScores());
+        }
+        Hashtable<ArrayList<Double>, ArrayList<Integer>> fitnessToIndices = Util.mapElemsToIndices(scores);
+        ArrayList<ArrayList<Double>> uniqueFitness = new ArrayList<>(fitnessToIndices.keySet());
+        if (uniqueFitness.size() == 1) {
             return population.getIndividualList();
         }
         // else must select parents
         int popSize = population.size();
         ArrayList<Individual> selectedIndividuals = new ArrayList<>();
 
+
         int k, i, offset;
         ArrayList<ArrayList<Double>> candidateFitness, chosenFitness;
         ArrayList<Pair<Integer, Double>> frontAndCrowding;
         CrowdedCompare comparator = new CrowdedCompare();
-        int front; double crowding;
-        while (selectedIndividuals.size() != popSize)
-        {
+        int front;
+        double crowding;
+        while (selectedIndividuals.size() != popSize) {
             // either pick all the fitness and select a random individual from them
             // or select a subset of them. depends on how many new parents still need to add
             k = Math.min(2 * (popSize - selectedIndividuals.size()), uniqueFitness.size());
@@ -386,8 +357,7 @@ public class Population {
             candidateFitness = Util.selectWithoutReplacement(uniqueFitness, k, stream);
 
             frontAndCrowding = new ArrayList<>();
-            for (ArrayList<Double> fitness : candidateFitness)
-            {
+            for (ArrayList<Double> fitness : candidateFitness) {
                 crowding = population.getFitnessToCrowding().get(fitness);
                 front = population.getFitnessToFront().get(fitness);
                 frontAndCrowding.add(new Pair<>(front, crowding));
@@ -396,21 +366,18 @@ public class Population {
             // choose the fitness
             chosenFitness = new ArrayList<>();
             i = 0;
-            while (i < k)
-            {
+            while (i < k) {
                 // compare using the crowded compare operator (from Pair)
-                offset = (comparator.compare(frontAndCrowding.get(i), frontAndCrowding.get(i+1)) > 0) ? 0 : 1;
-                chosenFitness.add(candidateFitness.get(i+offset));
-                i+=2;
+                offset = (comparator.compare(frontAndCrowding.get(i), frontAndCrowding.get(i + 1)) > 0) ? 0 : 1;
+                chosenFitness.add(candidateFitness.get(i + offset));
+                i += 2;
             }
 
             // now randomly choose an individual from the indices associated with the chosen fitness
             ArrayList<Integer> indicesWithSameFitness;
-            for (ArrayList<Double> fitness : chosenFitness)
-            {
-                indicesWithSameFitness = population.getFitnessToIndices().get(fitness);
-                if (indicesWithSameFitness.size() > 1)
-                {
+            for (ArrayList<Double> fitness : chosenFitness) {
+                indicesWithSameFitness = fitnessToIndices.get(fitness);
+                if (indicesWithSameFitness.size() > 1) {
                     int index = Util.chooseRandom(indicesWithSameFitness, stream);
                     selectedIndividuals.add(new Individual(population.get(index)));
                 }
@@ -420,6 +387,23 @@ public class Population {
         return selectedIndividuals;
     }
 
+
+    Population generateOffsprings(Mutate mutate, Crossover crossover, RngStream stream) {
+        ArrayList<Individual> newIndividuals = new ArrayList<>();
+        Pair<Integer, Integer> parentIndices;
+        for (int i = 0; i != individualList.size(); ++i) {
+            parentIndices = Util.select2(0, individualList.size(), stream);
+
+            // crossover
+            Individual offspring = crossover.crossover(individualList.get(parentIndices.getFirst()), individualList.get(parentIndices.getSecond()));
+
+            // mutate
+            offspring = mutate.mutate(offspring);
+
+            newIndividuals.add(offspring);
+        }
+        return new Population(newIndividuals, evaluationFunction);
+    }
 
 
     Individual get(int index) {
@@ -431,8 +415,15 @@ public class Population {
     }
 
     public ArrayList<Individual> getIndividualList() {
-        return individualList;
+        return new ArrayList<>(individualList);
     }
 
+    public ArrayList<Individual> getIndividualAtIndices(ArrayList<Integer> indices) {
+        ArrayList<Individual> copied = new ArrayList<>();
+        for (Integer index : indices) {
+            copied.add(new Individual(individualList.get(index)));
+        }
+        return copied;
+    }
 
 }

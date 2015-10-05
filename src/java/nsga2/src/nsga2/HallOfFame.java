@@ -25,16 +25,20 @@ public class HallOfFame extends Population{
         individualList.addAll(firstFront);
 
         // map fitness -> fronts
-        fronts = getNondominatingFronts(this);
+        fronts = getNonDominatingFronts(this);
         individualList = Util.getIndices(individualList, fronts.get(0));
 
         if (individualList.size() > maxSize)
         {
             // filter out by crowding distance
-            fitnessToIndices = getUniqueFitnessToIndices(this);
+            ArrayList<ArrayList<Double>> scores = new ArrayList<>();
+            for (Individual individual : individualList)
+            {
+                scores.add(individual.getScores());
+            }
             fitnessToCrowding = new Hashtable<>();
             fitnessToCrowding.putAll(getFitnessToCrowding(this, fronts.get(0)));
-            individualList = Util.getIndices(individualList, lastFrontSelection(this, fronts.get(0), fitnessToCrowding, stream, maxSize));
+            individualList = Util.getIndices(individualList, lastFrontSelection(this, fronts.get(0), maxSize, stream));
         }
     }
 }

@@ -1,8 +1,10 @@
 package nsga2.util;
 
 
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Hashtable;
 import java.util.List;
 
 
@@ -14,17 +16,24 @@ public final class Util {
 
     /**
      * choose a single element in the list, with randint(0, len(list))
+     *
      * @param list
      * @param stream
      * @param <T>
      * @return
      */
-    public static <T> T chooseRandom(List<T> list, RngStream stream)
-    {
-        return list.get(stream.randInt(0, list.size()-1));
+    public static <T> T chooseRandom(List<T> list, RngStream stream) {
+        return list.get(stream.randInt(0, list.size() - 1));
     }
 
 
+    public static <T> ArrayList<T> flatten(List<List<T>> nested) {
+        ArrayList<T> flat = new ArrayList<>();
+        for (List<T> subList : nested) {
+            flat.addAll(subList);
+        }
+        return flat;
+    }
 
 
     /**
@@ -75,31 +84,40 @@ public final class Util {
     }
 
 
-
     /**
      * O(n) deletion, taking advantage that both lists are sorted
      *
      * @param sortedList
-     * @param sortedIndicesToDelete
+     * @param toDelete
      * @return
      */
     public static ArrayList<Integer> fastDelete(ArrayList<Integer> sortedList,
-                                                ArrayList<Integer> sortedIndicesToDelete) {
-        assert (isSorted(sortedList) && isSorted(sortedIndicesToDelete));
-        ArrayList<Integer> filtered = new ArrayList<>();
-        int deletionIndex = 0;
-        final int numToDelete = sortedIndicesToDelete.size();
-        for (int i : sortedList) {
-            // catch up
-            while ((sortedIndicesToDelete.get(deletionIndex) < i) && (deletionIndex < numToDelete)) {
-                deletionIndex += 1;
+                                                 ArrayList<Integer> toDelete) {
+        //take advantage of the knowledge that both vectors are sorted O(n)
+        assert (Util.isSorted(sortedList));
+        assert (Util.isSorted(toDelete));
+        ArrayList<Integer> result = new ArrayList<>();
+
+        if (toDelete.size() == 0)
+        {
+            return new ArrayList<>(sortedList);
+        }
+
+        int deleteIndex = 0;
+        int deleteSize = toDelete.size();
+        for (Integer i : sortedList) {
+
+            // iterate to the next valid index, value>=to i
+            while ((toDelete.get(deleteIndex) < i) && (deleteIndex + 1 < deleteSize)) {
+                deleteIndex += 1;
             }
-            if (i != sortedIndicesToDelete.get(deletionIndex)) {
-                filtered.add(i);
+
+            if (toDelete.get(deleteIndex).compareTo(i) != 0) {
+                result.add(i);
             }
 
         }
-        return filtered;
+        return result;
     }
 
 
@@ -140,10 +158,35 @@ public final class Util {
         return total;
     }
 
-    public static <T> T arrayListLast(ArrayList<T> list)
-    {
-        return list.get(list.size() - 1);
+
+    public static Pair<Integer, Integer> select2(int low, int high, RngStream stream) {
+        // select 2 different random integers in the interval
+        assert (high - 1 > low);
+        int first = stream.randInt(low, high - 1);
+        int second = stream.randInt(low, high - 1);
+
+        while (first == second) {
+            second = stream.randInt(low, high - 1);
+        }
+        return new Pair(first, second);
     }
 
+
+    /**
+     * for each individual, map scores => list of index with same score
+     *
+     */
+    public static <T> Hashtable<T, ArrayList<Integer>> mapElemsToIndices(ArrayList<T> list) {
+        Hashtable<T, ArrayList<Integer>> valueToIndices = new Hashtable<>();
+        int index = 0;
+        for (T value : list) {
+            if (!valueToIndices.containsKey(value)) {
+                valueToIndices.put(value, new ArrayList<Integer>());
+            }
+            valueToIndices.get(value).add(index);
+            index += 1;
+        }
+        return valueToIndices;
+    }
 
 }

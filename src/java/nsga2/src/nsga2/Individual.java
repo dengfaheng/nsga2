@@ -24,6 +24,13 @@ public class Individual implements Comparable<Individual> {
     }
 
 
+    public Individual(ArrayList<Integer> genes)
+    {
+        this.genes = genes;
+        scores = new ArrayList<>();
+    }
+
+
     /**
      * Copy constructor
      *
@@ -82,7 +89,8 @@ public class Individual implements Comparable<Individual> {
     public int compareTo(@NotNull Individual other) {
         assert (scores.size() == other.getScores().size());
 
-        boolean firstDominates = false, secondDominates = false;
+        boolean firstDominates = false;
+        boolean secondDominates = false;
         Double i,j;
         int compare;
 
