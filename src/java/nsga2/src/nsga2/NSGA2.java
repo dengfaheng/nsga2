@@ -94,12 +94,7 @@ public final class NSGA2 {
 
 
             // STEP 1.5: UPDATE HALL OF FAME
-            ArrayList<Individual> tmp = new ArrayList<>();
-            for (int index : merged.getFronts().get(0))
-            {
-                tmp.add(new Individual(merged.getIndividualList().get(index)));
-            }
-            hallOfFame.addFirstFront(tmp, stream);
+            hallOfFame.addFirstFront(merged.getIndividualAtIndices(merged.getFronts().get(0)), stream);
 
 
             // STEP 2: SELECT PARENTS

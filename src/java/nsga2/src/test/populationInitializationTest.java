@@ -101,7 +101,7 @@ class populationInitializationTest {
 
             private Integer flip(Integer gene)
             {
-                if (gene == 1)
+                if (gene.compareTo(1) == 0)
                 {
                     return 0;
                 }

@@ -101,7 +101,7 @@ public class binarySumExample {
 
         private Integer flip(Integer gene)
         {
-            if (gene == 1)
+            if (gene.compareTo(1) == 0)
             {
                 return 0;
             }
@@ -166,8 +166,8 @@ public class binarySumExample {
         double mutProb = 0.05;
         double crossApp = 0.3;
         double mixingRatio= 0.2;
-        int geneSize = 100;
-        int popSize = 250;
+        int geneSize = 10;
+        int popSize = 10;
         int numGenerations = 10;
         int maxHOFSize = popSize;
         long[] seeds = {42, 42, 42, 42, 42, 42};

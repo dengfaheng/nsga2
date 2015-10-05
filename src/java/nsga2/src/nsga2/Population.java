@@ -38,6 +38,15 @@ public class Population {
         // copy individuals
         individualList = new ArrayList<>(individualList_);
         evaluationFunction = evaluationFunction_;
+        calculateFronts();
+
+        for (ArrayList<Integer> front: fronts)
+        {
+            for(Integer index : front)
+            {
+                assert(fitnessToCrowding.containsKey(individualList.get(index).getScores()));
+            }
+        }
     }
 
 
@@ -97,8 +106,15 @@ public class Population {
         // map fitness -> crowding
         fitnessToCrowding = new Hashtable<>();
         for (ArrayList<Integer> frontIndices : fronts) {
-            fitnessToCrowding.putAll(getFitnessToCrowding(this, frontIndices));
+            Hashtable<ArrayList<Double>, Double> frontCrowding = getFitnessToCrowding(this, frontIndices);
+            for (ArrayList<Double> fitness : frontCrowding.keySet())
+            {
+                fitnessToCrowding.put(new ArrayList<>(fitness), new Double(frontCrowding.get(fitness)));
+            }
         }
+
+
+
     }
 
 
@@ -133,7 +149,7 @@ public class Population {
     public static Hashtable<ArrayList<Double>, Double> getFitnessToCrowding(Population population,
                                                                             ArrayList<Integer> frontIndices) {
         ArrayList<Individual> front = Util.getIndices(population.getIndividualList(), frontIndices);
-        Hashtable<ArrayList<Double>, Double> fitnessToCrowding = new Hashtable<>();
+        Hashtable<ArrayList<Double>, Double> fitnessToCrowdingMap = new Hashtable<>();
 
         // map fitness => crowding_distance
         ArrayList<ArrayList<Double>> uniqueFitness = new ArrayList<>();
@@ -141,7 +157,7 @@ public class Population {
             ArrayList<Double> fitness = individual.getScores();
             if (!uniqueFitness.contains(fitness)) {
                 uniqueFitness.add(fitness);
-                fitnessToCrowding.put(fitness, 0.0);
+                fitnessToCrowdingMap.put(fitness, 0.0);
             }
         }
 
@@ -162,8 +178,8 @@ public class Population {
             // assign
             ArrayList<Double> best = list.get(0);
             ArrayList<Double> worse = list.get(list.size() - 1);
-            fitnessToCrowding.put(best, Double.POSITIVE_INFINITY);
-            fitnessToCrowding.put(worse, Double.POSITIVE_INFINITY);
+            fitnessToCrowdingMap.put(best, Double.POSITIVE_INFINITY);
+            fitnessToCrowdingMap.put(worse, Double.POSITIVE_INFINITY);
         }
 
         // assign crowding distances to the other fitness vectors for each objectives
@@ -171,10 +187,10 @@ public class Population {
             // check for edge case (when all scores of the objective are the same)
             if (objectiveRanges.get(i) != 0.) {
                 double objectiveRange = objectiveRanges.get(i);
-                for (int j = 2; j != uniqueFitness.size() - 1; ++j) {
+                for (int j = 2; j < uniqueFitness.size()-1; ++j) {
                     // fetch the current values
                     ArrayList<Double> currentFitness = sortedByObjectives.get(i).get(j);
-                    double crowding = fitnessToCrowding.get(currentFitness);
+                    double crowding = fitnessToCrowdingMap.get(currentFitness);
 
                     // crowding of n_1 is n_0 - n_2 / range_n (and infinity for edge cases)
                     double fitPrevious = sortedByObjectives.get(i).get(j - 1).get(i);
@@ -182,11 +198,11 @@ public class Population {
                     crowding += (fitPrevious - fitNext) / objectiveRange;
 
                     // update
-                    fitnessToCrowding.put(currentFitness, crowding);
+                    fitnessToCrowdingMap.put(currentFitness, crowding);
                 }
             }
         }
-        return fitnessToCrowding;
+        return fitnessToCrowdingMap;
     }
 
 
@@ -210,7 +226,6 @@ public class Population {
         // some forward declarations
         // num of individuals we need
         int cutoff = (int) Math.ceil(population.size() / 2.0);
-        System.out.println(cutoff);
 
         // indices of the non dominated individuals of the current front
 
@@ -263,31 +278,33 @@ public class Population {
         assert (0 < numToSelect) && (numToSelect < lastFrontIndices.size());
 
         // map fitness -> indices (one to many) and map fitness -> crowding distance
-        Hashtable<ArrayList<Double>, ArrayList<Integer>> mapping = new Hashtable<>();
+        Hashtable<ArrayList<Double>, ArrayList<Integer>> fitnessToIndices = new Hashtable<>();
         for (int index : lastFrontIndices) {
             ArrayList<Double> fitness = population.get(index).getScores();
-            if (!mapping.contains(fitness)) {
-                mapping.put(fitness, new ArrayList<Integer>());
+            if (!fitnessToIndices.containsKey(fitness)) {
+                fitnessToIndices.put(fitness, new ArrayList<Integer>());
             }
-            mapping.get(fitness).add(index);
+            ArrayList<Integer> current = fitnessToIndices.get(fitness);
+            current.add(index);
+            fitnessToIndices.put(fitness, new ArrayList<>(current));
         }
 
         // shuffle the indices so we don't need to later
-        for (ArrayList<Double> fit : mapping.keySet()) {
-            mapping.put(fit, Util.fisherYatesShuffle(mapping.get(fit), stream));
+        for (ArrayList<Double> fit : fitnessToIndices.keySet()) {
+            fitnessToIndices.put(fit, Util.fisherYatesShuffle(fitnessToIndices.get(fit), stream));
 
         }
 
-        ArrayList<Pair<ArrayList<Double>, Double>> fitnessCrowdingPairs = new ArrayList<>();
-        for (ArrayList<Double> key : population.getFitnessToCrowding().keySet()) {
-            fitnessCrowdingPairs.add(new Pair<>(key, population.getFitnessToCrowding().get(key)));
+        ArrayList<Pair<ArrayList<Double>, Double>> fitnessToCrowdingMap = new ArrayList<>();
+        for (ArrayList<Double> key : fitnessToIndices.keySet()) {
+            fitnessToCrowdingMap.add(new Pair<>(key, population.getFitnessToCrowding().get(key)));
         }
 
         // sort fitness by decreasing crowding distance
         ArrayList<ArrayList<Double>> orderedFitness = new ArrayList<>();
         ReversedPairSecondComparator<ArrayList<Double>> comparator = new ReversedPairSecondComparator<>();
-        Collections.sort(fitnessCrowdingPairs, comparator);
-        for (Pair<ArrayList<Double>, Double> pair : fitnessCrowdingPairs) {
+        Collections.sort(fitnessToCrowdingMap, comparator);
+        for (Pair<ArrayList<Double>, Double> pair : fitnessToCrowdingMap) {
             orderedFitness.add(pair.getFirst());
         }
 
@@ -297,21 +314,21 @@ public class Population {
         ArrayList<Integer> chosenIndices = new ArrayList<>();
         while (chosenIndices.size() < numToSelect) {
             ArrayList<Double> fitness = orderedFitness.get(position);
-            ArrayList<Integer> fitnessIndices = mapping.get(fitness);
+            ArrayList<Integer> indices = fitnessToIndices.get(fitness);
 
-            // add the last one (they are shuffled so it doesn't matter
-            chosenIndices.add(fitnessIndices.get(fitnessIndices.size() - 1));
-            fitnessIndices.remove(fitnessIndices.size() - 1);
-            if (fitnessIndices.size() == 0) {
-                mapping.remove(fitness);
+            // add the last one (they are shuffled so it doesn't matter)
+            int index = indices.get(indices.size() -1);
+            chosenIndices.add(index);
+            indices.remove(indices.size() - 1);
+            if (indices.size() == 0) {
                 orderedFitness.remove(position);
             } else {
-                mapping.put(fitness, fitnessIndices);
+                fitnessToIndices.put(fitness, indices);
                 position += 1;
             }
 
             // wrap around if the increment made it go out of bounds
-            if (position > orderedFitness.size()) {
+            if (position >= orderedFitness.size()) {
                 position = 0;
             }
 
@@ -328,6 +345,8 @@ public class Population {
      */
     public static ArrayList<Individual> uniqueFitnessTournamentSelection(Population population, RngStream stream) {
         //  edge case: only one fitness, return the population as it was
+
+        //TODO debug this shit
         ArrayList<ArrayList<Double>> scores = new ArrayList<>();
         for (Individual individual : population.getIndividualList()) {
             scores.add(individual.getScores());
@@ -343,18 +362,17 @@ public class Population {
 
 
         int k, i, offset;
-        ArrayList<ArrayList<Double>> candidateFitness, chosenFitness;
-        ArrayList<Pair<Integer, Double>> frontAndCrowding;
+
+
         CrowdedCompare comparator = new CrowdedCompare();
-        int front;
-        double crowding;
+
         while (selectedIndividuals.size() != popSize) {
             // either pick all the fitness and select a random individual from them
             // or select a subset of them. depends on how many new parents still need to add
             k = Math.min(2 * (popSize - selectedIndividuals.size()), uniqueFitness.size());
 
             // sample k unique fitness and get their front and crowding information
-            candidateFitness = Util.selectWithoutReplacement(uniqueFitness, k, stream);
+            ArrayList<ArrayList<Double>> candidateFitness = Util.selectWithoutReplacement(uniqueFitness, k, stream);
 
             frontAndCrowding = new ArrayList<>();
             for (ArrayList<Double> fitness : candidateFitness) {
